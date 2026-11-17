@@ -11,12 +11,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -54,14 +56,14 @@ private val NavigationDestinations = listOf(
     // Símbolo de la sección del historial médico.
     NavigationDestination("Historial", imageIcon = R.drawable.historial_medico),
 
-    // Símbolo del expediente.
-    NavigationDestination("Expediente", textIcon = "▤"),
+    // Icono de resumen médico.
+    NavigationDestination("Resumen", imageIcon = R.drawable.resumen),
 
-    // Símbolo de mensajes.
-    NavigationDestination("Mensajes", textIcon = "✉"),
+    // Icono y nombre del módulo de documentos.
+    NavigationDestination("Documentos", imageIcon = R.drawable.informe),
 
-    // Símbolo de ajustes.
-    NavigationDestination("Ajustes", textIcon = "⚙")
+    // Icono y nombre del módulo de vacunación.
+    NavigationDestination("Vacunación", imageIcon = R.drawable.jeringuilla)
 )
 
 // Activity de entrada: habilita el dibujo detrás de las barras del sistema.
@@ -89,29 +91,102 @@ private fun CmdHomeScreen() {
     // Guarda cuál pestaña de la barra inferior está seleccionada.
     var selectedTab by remember { mutableIntStateOf(0) }
 
+    // Recuerda la pestaña anterior para volver desde Seguridad/Configuración.
+    var pestanaAnterior by remember { mutableIntStateOf(0) }
+
     // Conserva el perfil familiar elegido al cambiar entre pestañas.
     var perfilSeleccionado by remember { mutableStateOf("Mamá") }
+    val perfilesFamiliares = remember {
+        mutableStateListOf(
+            PerfilFamiliarDemo(
+                id = "Mamá",
+                nombre = "María",
+                parentesco = "Mamá",
+                datos = mapOf(
+                    "Nombre completo" to "María",
+                    "Parentesco" to "Madre",
+                    "Tipo de sangre" to "O positivo (O+)",
+                    "Alergias" to "No registrado"
+                )
+            ),
+            PerfilFamiliarDemo(
+                id = "Hijo",
+                nombre = "Lucas",
+                parentesco = "Hijo",
+                datos = mapOf(
+                    "Nombre completo" to "Lucas",
+                    "Parentesco" to "Hijo",
+                    "Tipo de sangre" to "No registrado",
+                    "Alergias" to "No registrado"
+                )
+            )
+        )
+    }
 
     // Convierte la relación familiar seleccionada en el nombre visible del perfil.
-    val nombrePerfilSeleccionado = when (perfilSeleccionado) {
-        "Mamá" -> "María"
-        "Hijo" -> "Lucas"
-        else -> "Nuevo perfil"
+    val perfilActivo = perfilesFamiliares.firstOrNull { it.id == perfilSeleccionado }
+    val nombrePerfilSeleccionado = perfilActivo?.nombre.orEmpty()
+
+    // Obtiene los datos médicos guardados para el perfil familiar seleccionado.
+    val datosMedicosPerfil = perfilActivo?.datos
+    val alergiasPerfil = datosMedicosPerfil?.get("Alergias")
+        ?.takeIf { it.isNotBlank() } ?: "No registrado"
+    val tipoSangrePerfil = datosMedicosPerfil?.get("Tipo de sangre")
+        ?.takeIf { it.isNotBlank() }
+        ?: when (perfilSeleccionado) {
+            "Mamá" -> "O+"
+            else -> "No registrado"
+        }
+
+    // Cambia el degradado de fondo según el módulo que esté abierto.
+    val fondoDegradado = when (selectedTab) {
+        1 -> Brush.verticalGradient(
+            colors = listOf(
+                Color(0xFF164B66),
+                Color(0xFF177D89),
+                Color(0xFF35A99C)
+            )
+        )
+        2 -> Brush.verticalGradient(
+            colors = listOf(
+                Color(0xFF145B45),
+                Color(0xFF218D64),
+                Color(0xFF40B88A)
+            )
+        )
+        3 -> Brush.verticalGradient(
+            colors = listOf(
+                Color(0xFF233C67),
+                Color(0xFF3D6698),
+                Color(0xFF6894B5)
+            )
+        )
+        4 -> Brush.verticalGradient(
+            colors = listOf(
+                Color(0xFF3D3475),
+                Color(0xFF5B55A5),
+                Color(0xFF8580C5)
+            )
+        )
+        else -> Brush.verticalGradient(
+            colors = listOf(CmdNavy, Color(0xFF20A199), CmdTeal)
+        )
+    }
+
+    // Ajusta el color translúcido de la tarjeta del perfil al degradado del módulo.
+    val colorTarjetaPerfil = when (selectedTab) {
+        1 -> Color(0xBA218D91)
+        2 -> Color(0xBA218D64)
+        3 -> Color(0xBA3D6698)
+        4 -> Color(0xBA625BA8)
+        else -> Color(0xBA32B6AD)
     }
 
     // Aplica el tema Material y deja el degradado como fondo de toda la ventana.
     MaterialTheme {
         // Fondo único para la pantalla, la navegación inferior y las barras del sistema.
         Box(
-            modifier = Modifier.fillMaxSize().background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        CmdNavy,
-                        Color(0xFF20A199),
-                        CmdTeal
-                    )
-                )
-            )
+            modifier = Modifier.fillMaxSize().background(fondoDegradado)
         ) {
             // Muestra primero el acceso; tras pulsar el botón se abre el inicio de demostración.
             if (!showHome) {
@@ -176,30 +251,89 @@ private fun CmdHomeScreen() {
                     }
                 }
                 ) { insets ->
-                    // Muestra la pantalla que corresponde a la pestaña seleccionada.
-                    when (selectedTab) {
-                        // Pantalla de inicio creada en el archivo InicioScreen.kt.
-                        0 -> InicioScreen(
-                            selectedMember = perfilSeleccionado,
-                            onMemberSelected = { perfilSeleccionado = it },
-                            modifier = Modifier.padding(insets)
-                        )
+                    Box(modifier = Modifier.fillMaxSize().padding(insets)) {
+                        // Muestra el módulo correspondiente a la pestaña seleccionada.
+                        when (selectedTab) {
+                            0 -> InicioScreen(
+                                selectedMember = perfilSeleccionado,
+                                onMemberSelected = { perfilSeleccionado = it },
+                                perfilesAgregados = perfilesFamiliares,
+                                onProfileAdded = { perfil -> perfilesFamiliares.add(perfil) },
+                                onProfileUpdated = { perfil ->
+                                    val index = perfilesFamiliares.indexOfFirst { it.id == perfil.id }
+                                    if (index >= 0) perfilesFamiliares[index] = perfil
+                                },
+                                onProfileDeleted = { perfil ->
+                                    perfilesFamiliares.removeAll { it.id == perfil.id }
+                                    if (perfilSeleccionado == perfil.id) {
+                                        perfilSeleccionado = perfilesFamiliares.firstOrNull()?.id.orEmpty()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
 
-                        // Módulo de historial médico creado en HistorialScreen.kt.
-                        1 -> HistorialScreen(
-                            selectedUserName = nombrePerfilSeleccionado,
-                            modifier = Modifier.padding(insets)
-                        )
+                            1 -> HistorialScreen(
+                                selectedUserName = nombrePerfilSeleccionado,
+                                colorTarjetaPerfil = colorTarjetaPerfil,
+                                modifier = Modifier.fillMaxSize()
+                            )
 
-                        // Pantallas que se completarán más adelante.
-                        else -> {
-                            Box(
-                                modifier = Modifier.fillMaxSize().padding(insets),
-                                contentAlignment = Alignment.Center
+                            2 -> ResumenMedicoScreen(
+                                selectedUserName = nombrePerfilSeleccionado,
+                                colorTarjetaPerfil = colorTarjetaPerfil,
+                                alergias = alergiasPerfil,
+                                tipoSangre = tipoSangrePerfil,
+                                modifier = Modifier.fillMaxSize()
+                            )
+
+                            3 -> DocumentosScreen(
+                                selectedUserName = nombrePerfilSeleccionado,
+                                colorTarjetaPerfil = colorTarjetaPerfil,
+                                modifier = Modifier.fillMaxSize()
+                            )
+
+                            4 -> VacunacionScreen(
+                                selectedUserName = nombrePerfilSeleccionado,
+                                colorTarjetaPerfil = colorTarjetaPerfil,
+                                modifier = Modifier.fillMaxSize()
+                            )
+
+                            5 -> Column(
+                                modifier = Modifier.fillMaxSize().padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
                             ) {
-                                // Texto provisional para las secciones aún no desarrolladas.
-                                Text("Pantalla en construcción", color = Color.White)
+                                Text(
+                                    "Seguridad / Configuración",
+                                    color = Color.White,
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "Contraseña · 2FA · Sesiones · Copias de seguridad",
+                                    color = Color.White.copy(alpha = .9f),
+                                    fontSize = 14.sp
+                                )
                             }
+                        }
+
+                        // Acceso a Seguridad/Configuración en la esquina superior derecha.
+                        IconButton(
+                            onClick = {
+                                if (selectedTab == 5) {
+                                    selectedTab = pestanaAnterior
+                                } else {
+                                    pestanaAnterior = selectedTab
+                                    selectedTab = 5
+                                }
+                            },
+                            modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(44.dp)
+                        ) {
+                            Text(
+                                if (selectedTab == 5) "‹" else "⚙",
+                                color = Color.White,
+                                fontSize = 22.sp
+                            )
                         }
                     }
                 }

@@ -64,8 +64,13 @@ private val SubmodulosHistorial = listOf(
 
 // Pantalla principal del módulo Historial.
 @Composable
-fun HistorialScreen(selectedUserName: String, modifier: Modifier = Modifier) {
+fun HistorialScreen(
+    selectedUserName: String,
+    colorTarjetaPerfil: Color,
+    modifier: Modifier = Modifier
+) {
     var submoduloSeleccionado by remember { mutableStateOf<SubmoduloHistorial?>(null) }
+    var formularioAbierto by remember { mutableStateOf<String?>(null) }
     val metodosHistorial = MetodosHistorial()
 
     LazyColumn(
@@ -75,10 +80,10 @@ fun HistorialScreen(selectedUserName: String, modifier: Modifier = Modifier) {
     ) {
         item { EncabezadoHistorial() }
 
-        item { TarjetaPerfilSeleccionado(selectedUserName) }
+        item { TarjetaPerfilSeleccionado(selectedUserName, colorTarjetaPerfil) }
 
         items(SubmodulosHistorial) { submodulo ->
-            TarjetaSubmodulo(submodulo) {
+            TarjetaSubmodulo(submodulo, onAdd = { formularioAbierto = submodulo.nombre }) {
                 submoduloSeleccionado = submodulo
             }
         }
@@ -95,6 +100,19 @@ fun HistorialScreen(selectedUserName: String, modifier: Modifier = Modifier) {
             "Hospitalizaciones" -> metodosHistorial.mostrarHospitalizaciones(cerrarAviso)
             else -> Unit
         }
+    }
+
+    formularioAbierto?.let { modulo ->
+        RegistroFormularioSheet(
+            titulo = "Agregar: $modulo",
+            campos = FormulariosRegistro.historial,
+            permitirFoto = true,
+            onCerrar = { formularioAbierto = null },
+            onGuardar = { datos ->
+                RegistroLocalStore.agregar("Historial / $modulo", datos)
+                formularioAbierto = null
+            }
+        )
     }
 }
 
@@ -122,34 +140,9 @@ private fun EncabezadoHistorial() {
     }
 }
 
-// Tarjeta translúcida que identifica el perfil familiar seleccionado.
-@Composable
-private fun TarjetaPerfilSeleccionado(nombre: String) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xBA32B6AD)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = .25f))
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-
-            Text(
-                nombre,
-                color = Color.White,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-    }
-}
-
 // Tarjeta clickeable de un submódulo del historial.
 @Composable
-private fun TarjetaSubmodulo(submodulo: SubmoduloHistorial, onClick: () -> Unit) {
+private fun TarjetaSubmodulo(submodulo: SubmoduloHistorial, onAdd: () -> Unit, onClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -192,7 +185,7 @@ private fun TarjetaSubmodulo(submodulo: SubmoduloHistorial, onClick: () -> Unit)
 
         // Botón para simular la acción de agregar un registro a este submódulo.
         Button(
-            onClick = { },
+            onClick = onAdd,
             modifier = Modifier.size(50.dp),
             shape = CircleShape,
             border = BorderStroke(1.dp, HistorialCardBorder),

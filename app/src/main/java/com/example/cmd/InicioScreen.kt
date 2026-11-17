@@ -5,6 +5,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,25 +49,11 @@ private val SoftMint = Color(0xBAE8F5F2)
 // Nombre demostrativo usado en el encabezado.
 private const val DemoUserName = "Braulio Castillo"
 
-// Datos fijos de las funciones; cada una puede mostrar un PNG o una abreviatura.
-private data class Feature(val abbreviation: String, val title: String, val iconRes: Int? = null)
-
-// Filas fijas de accesos rápidos, en el mismo orden y distribución de la pantalla.
-private val HomeFeatureRows = listOf(
-    listOf(
-        // HM identifica el historial médico.
-        Feature("HM", "Historial médico", R.drawable.historial_medico),
-
-        // VA identifica el registro de vacunas.
-        Feature("VA", "Vacunas", R.drawable.jeringuilla)
-    ),
-    listOf(
-        // ME identifica alergias y medicamentos.
-        Feature("ME", "Medicamentos", R.drawable.medicina),
-
-        // RX identifica las recetas digitales.
-        Feature("RX", "Recetas", R.drawable.informe_medico)
-    )
+data class PerfilFamiliarDemo(
+    val id: String,
+    val nombre: String,
+    val parentesco: String,
+    val datos: Map<String, String>
 )
 
 // Calcula las iniciales del nombre una sola vez por valor de usuario.
@@ -83,28 +71,45 @@ private fun initialsFor(name: String): String = name
 fun InicioScreen(
     selectedMember: String,
     onMemberSelected: (String) -> Unit,
+    perfilesAgregados: List<PerfilFamiliarDemo> = emptyList(),
+    onProfileAdded: (PerfilFamiliarDemo) -> Unit = {},
+    onProfileUpdated: (PerfilFamiliarDemo) -> Unit = {},
+    onProfileDeleted: (PerfilFamiliarDemo) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    var mostrarAltaFamiliar by remember { mutableStateOf(false) }
+    var perfilEditando by remember { mutableStateOf<PerfilFamiliarDemo?>(null) }
+    var datosPerfilAbierto by remember { mutableStateOf<Map<String, String>?>(null) }
+    val datosSuperUsuario = mapOf(
+        "Nombre completo" to DemoUserName,
+        "Rol" to "Superusuario",
+        "Correo electrónico" to "No configurado",
+        "Teléfono" to "No configurado",
+        "Tipo de sangre" to "O+",
+        "Alergias" to "No registrado"
+    )
     // Lista desplazable con fondo de la pantalla.
     LazyColumn(
         modifier = modifier.fillMaxSize(),
     ) {
         // Encabezado de bienvenida y datos del usuario.
-        item { Header() }
+        item { Header(onViewProfile = { datosPerfilAbierto = datosSuperUsuario }) }
 
         // Contenido principal de la pantalla.
         item {
             Column(Modifier.padding(horizontal = 16.dp)) {
                 // Selector sencillo de perfiles familiares.
-                FamilyCard(selectedMember, onMemberSelected)
+                FamilyCard(
+                    selectedMember = selectedMember,
+                    perfilesAgregados = perfilesAgregados,
+                    onSelect = onMemberSelected,
+                    onAdd = { mostrarAltaFamiliar = true },
+                    onDetails = { datosPerfilAbierto = it },
+                    onEdit = { perfilEditando = it },
+                    onDelete = onProfileDeleted
+                )
 
-                // Separa la tarjeta familiar de los accesos rápidos.
-                Spacer(Modifier.height(10.dp))
-
-                // Muestra las funciones principales de CMD.
-                FeatureGrid()
-
-                // Separa los accesos rápidos de la próxima cita.
+                // Separa la tarjeta familiar de la próxima cita.
                 Spacer(Modifier.height(10.dp))
 
                 // Muestra un resumen de la cita más cercana.
@@ -112,11 +117,58 @@ fun InicioScreen(
             }
         }
     }
+
+    if (mostrarAltaFamiliar || perfilEditando != null) {
+        val perfilActual = perfilEditando
+        RegistroFormularioSheet(
+            titulo = if (perfilActual == null) "Agregar familiar" else "Editar perfil",
+            campos = FormulariosRegistro.familiar,
+            valoresIniciales = perfilActual?.datos.orEmpty(),
+            permitirFoto = true,
+            onCerrar = { mostrarAltaFamiliar = false; perfilEditando = null },
+            onGuardar = { datos ->
+                val nombre = datos["Nombre completo"].orEmpty().trim()
+                val perfil = PerfilFamiliarDemo(
+                    id = perfilActual?.id ?: "familiar_${System.currentTimeMillis()}",
+                    nombre = nombre,
+                    parentesco = datos["Parentesco"].orEmpty(),
+                    datos = datos
+                )
+                if (perfilActual == null) {
+                    onProfileAdded(perfil)
+                    onMemberSelected(perfil.id)
+                } else {
+                    onProfileUpdated(perfil)
+                }
+                mostrarAltaFamiliar = false
+                perfilEditando = null
+            }
+        )
+    }
+
+    datosPerfilAbierto?.let { datos ->
+        RegistroFormularioSheet(
+            titulo = if (datos["Rol"] == "Superusuario") "Perfil del superusuario" else "Datos del perfil",
+            campos = if (datos["Rol"] == "Superusuario") {
+                listOf(
+                    CampoRegistro("Nombre completo"),
+                    CampoRegistro("Rol"),
+                    CampoRegistro("Correo electrónico"),
+                    CampoRegistro("Teléfono"),
+                    CampoRegistro("Tipo de sangre"),
+                    CampoRegistro("Alergias")
+                )
+            } else FormulariosRegistro.familiar,
+            valoresIniciales = datos,
+            soloLectura = true,
+            onCerrar = { datosPerfilAbierto = null }
+        )
+    }
 }
 
-// Encabezado compacto con identidad CMD y saludo personalizado.
+// Encabezado compacto con identidad CMD y acceso al perfil del superusuario.
 @Composable
-private fun Header() {
+private fun Header(onViewProfile: () -> Unit) {
     // Nombre de ejemplo; después puede venir del perfil o de la base de datos.
     val nombreUsuario = DemoUserName
 
@@ -186,7 +238,11 @@ private fun Header() {
                     Spacer(Modifier.height(5.dp))
 
                     // Acción visible para editar el perfil.
-                    Surface(shape = RoundedCornerShape(20.dp), color = Color.White) {
+                    Surface(
+                        modifier = Modifier.clickable(onClick = onViewProfile),
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color.White
+                    ) {
                         Text(
                             "Ver perfil",
                             color = Navy,
@@ -202,7 +258,15 @@ private fun Header() {
 
 // Tarjeta para elegir un familiar o iniciar la acción de agregar un perfil.
 @Composable
-private fun FamilyCard(selected: String, onSelect: (String) -> Unit) {
+private fun FamilyCard(
+    selectedMember: String,
+    perfilesAgregados: List<PerfilFamiliarDemo>,
+    onSelect: (String) -> Unit,
+    onAdd: () -> Unit,
+    onDetails: (Map<String, String>) -> Unit,
+    onEdit: (PerfilFamiliarDemo) -> Unit,
+    onDelete: (PerfilFamiliarDemo) -> Unit
+) {
     // Superficie blanca con sombra mínima para mantener un aspecto limpio.
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -239,23 +303,38 @@ private fun FamilyCard(selected: String, onSelect: (String) -> Unit) {
             // Separa la indicación de las tarjetas de selección.
             Spacer(Modifier.height(9.dp))
 
-            // Presenta los perfiles y la opción para agregar otro.
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                // Perfil demostrativo de María.
-                MemberTile("M", "Mamá", "María", selected == "Mamá", Modifier.weight(1f)) {
-                    onSelect("Mamá")
+            // Mantiene visible Agregar perfil y permite desplazar los perfiles si se acumulan.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                perfilesAgregados.forEach { perfil ->
+                    key(perfil.id) {
+                        MemberTile(
+                            role = perfil.parentesco,
+                            name = perfil.nombre,
+                            selected = selectedMember == perfil.id,
+                            modifier = Modifier.width(88.dp),
+                            onClick = { onSelect(perfil.id); onDetails(perfil.datos) },
+                            onEdit = { onEdit(perfil) },
+                            onDelete = { onDelete(perfil) }
+                        )
+                    }
                 }
 
-                // Perfil demostrativo de Lucas.
-                MemberTile("L", "Hijo", "Lucas", selected == "Hijo", Modifier.weight(1f)) {
-                    onSelect("Hijo")
                 }
 
-                // Opción para agregar un nuevo integrante de la familia.
+                Spacer(Modifier.width(8.dp))
+
+                // Opción fija para agregar un familiar, aun cuando haya muchos perfiles.
                 Column(
-                    modifier = Modifier.weight(1f).height(76.dp).clip(RoundedCornerShape(12.dp))
+                    modifier = Modifier.width(76.dp).height(88.dp).clip(RoundedCornerShape(12.dp))
                         .background(SoftMint)
-                        .clickable { onSelect("Nuevo perfil") }
+                        .clickable(onClick = onAdd)
                         .padding(7.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
@@ -274,12 +353,13 @@ private fun FamilyCard(selected: String, onSelect: (String) -> Unit) {
 // Tarjeta individual de un perfil dentro del selector familiar.
 @Composable
 private fun MemberTile(
-    initial: String,
     role: String,
     name: String,
     selected: Boolean,
     modifier: Modifier,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
 ) {
     // Anima suavemente el cambio entre el tono claro y el azul seleccionado translúcido.
     val tileBackgroundColor by animateColorAsState(
@@ -289,95 +369,40 @@ private fun MemberTile(
     )
 
     // El fondo azul translúcido y el texto claro indican el perfil seleccionado.
-    Column(
-        modifier = modifier.height(76.dp).clip(RoundedCornerShape(12.dp))
+    var menuAbierto by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = modifier.height(88.dp).clip(RoundedCornerShape(12.dp))
             .background(tileBackgroundColor)
             .clickable(onClick = onClick)
-            .padding(6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .padding(6.dp)
     ) {
-        // Inicial sencilla del familiar en lugar de un emoji.
-        Text(
-            initial,
-            color = if (selected) Color.White else Navy,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold
-        )
+        Column(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 3.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(role, color = if (selected) Color.White else Ink, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            Text(name, color = if (selected) Color.White.copy(alpha = .9f) else Muted, fontSize = 10.sp, maxLines = 2, textAlign = TextAlign.Center)
+        }
 
-        // Relación familiar del perfil.
-        Text(
-            role,
-            color = if (selected) Color.White else Ink,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-
-        // Nombre del familiar.
-        Text(
-            name,
-            color = if (selected) Color.White.copy(alpha = .85f) else Muted,
-            fontSize = 9.sp
-        )
-    }
-}
-
-// Cuadrícula de funciones con etiquetas breves en lugar de emojis.
-@Composable
-private fun FeatureGrid() {
-    // Presenta dos tarjetas por fila para que cada opción sea más fácil de tocar.
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        HomeFeatureRows.forEach { row ->
-            // Fila con dos accesos rápidos del mismo tamaño.
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { feature ->
-                    // Tarjeta clara para una función de la aplicación.
-                    Card(
-                        modifier = Modifier.weight(1f).height(72.dp).clickable { },
-                        shape = RoundedCornerShape(13.dp),
-                        colors = CardDefaults.cardColors(containerColor = CardSurface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                        border = BorderStroke(1.dp, CardBorder)
-                    ) {
-                        // Alinea el icono y el nombre de la función en cada tarjeta.
-                        Row(
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Fondo suave que contiene el PNG o la etiqueta de respaldo.
-                            Box(
-                                Modifier.size(38.dp).clip(CircleShape).background(SoftMint),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                // PNG médico de la función o iniciales si no hay un icono asociado.
-                                if (feature.iconRes != null) {
-                                    Image(
-                                        painter = painterResource(id = feature.iconRes),
-                                        contentDescription = feature.title,
-                                        modifier = Modifier.size(25.dp),
-                                        contentScale = ContentScale.Fit
-                                    )
-                                } else {
-                                    // Iniciales de respaldo para funciones sin un PNG equivalente.
-                                    Text(feature.abbreviation, color = Navy, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-
-                            // Separa el icono del título de la función.
-                            Spacer(Modifier.width(10.dp))
-
-                            // Nombre directo de la función.
-                            Text(
-                                feature.title,
-                                color = Ink,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                textAlign = TextAlign.Start
-                            )
-                        }
-                    }
-                }
-
+        Box(
+            modifier = Modifier.align(Alignment.TopEnd).size(30.dp).clickable { menuAbierto = true },
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "⋯",
+                color = if (selected) Color.White else Navy,
+                fontSize = 19.sp,
+                lineHeight = 19.sp
+            )
+            DropdownMenu(
+                expanded = menuAbierto,
+                onDismissRequest = { menuAbierto = false },
+                containerColor = Color(0xFFF2F7FA)
+            ) {
+                DropdownMenuItem(text = { Text("Editar") }, onClick = { menuAbierto = false; onEdit() })
+                DropdownMenuItem(text = { Text("Eliminar") }, onClick = { menuAbierto = false; onDelete() })
             }
         }
     }
