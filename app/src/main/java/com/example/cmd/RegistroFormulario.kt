@@ -21,11 +21,15 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -42,13 +46,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import java.io.File
+import java.util.Calendar
+import java.util.Locale
+import java.util.TimeZone
 
 // Define un campo que puede ser de texto o una lista de opciones.
 data class CampoRegistro(
     val etiqueta: String,
     val opciones: List<String> = emptyList(),
     val requerido: Boolean = true,
-    val unaLinea: Boolean = true
+    val unaLinea: Boolean = true,
+    val esFecha: Boolean = false
 )
 
 // Centraliza los campos reutilizables; cada pantalla elige el formulario que necesita.
@@ -56,30 +64,67 @@ object FormulariosRegistro {
     val familiar = listOf(
         CampoRegistro("Nombre completo"),
         CampoRegistro("Parentesco", listOf("Madre", "Padre", "Hijo", "Hija", "Pareja", "Otro")),
-        CampoRegistro("Fecha de nacimiento", requerido = false),
+        CampoRegistro("Fecha de nacimiento", requerido = false, esFecha = true),
         CampoRegistro("Tipo de sangre", listOf("A positivo (A+)", "A negativo (A-)", "B positivo (B+)", "B negativo (B-)", "AB positivo (AB+)", "AB negativo (AB-)", "O positivo (O+)", "O negativo (O-)"), requerido = false),
         CampoRegistro("Alergias", requerido = false, unaLinea = false)
     )
-    val historial = listOf(
-        CampoRegistro("Fecha"), CampoRegistro("Descripción", requerido = false, unaLinea = false),
-        CampoRegistro("Diagnóstico", requerido = false), CampoRegistro("Médico o institución", requerido = false)
-    )
+    // Devuelve solo los campos necesarios para registrar cada tipo de evento médico.
+    fun historialPorSubmodulo(submodulo: String): List<CampoRegistro> = when (submodulo) {
+        "Accidentes" -> listOf(
+            CampoRegistro("Fecha del accidente", esFecha = true),
+            CampoRegistro("Qué ocurrió", unaLinea = false),
+            CampoRegistro("Lesión o diagnóstico", requerido = false, unaLinea = false),
+            CampoRegistro("Atención recibida", requerido = false, unaLinea = false)
+        )
+        "Cirugías" -> listOf(
+            CampoRegistro("Fecha de cirugía", esFecha = true),
+            CampoRegistro("Procedimiento"),
+            CampoRegistro("Diagnóstico o motivo", unaLinea = false),
+            CampoRegistro("Médico cirujano", requerido = false),
+            CampoRegistro("Hospital", requerido = false),
+            CampoRegistro("Complicaciones", requerido = false, unaLinea = false)
+        )
+        "Consultas" -> listOf(
+            CampoRegistro("Fecha de consulta", esFecha = true),
+            CampoRegistro("Especialidad", listOf("Medicina General", "Pediatría", "Ortopedia", "Cardiología")),
+            CampoRegistro("Motivo de consulta", unaLinea = false),
+            CampoRegistro("Diagnóstico", requerido = false, unaLinea = false),
+            CampoRegistro("Médico tratante", requerido = false)
+        )
+        "Enfermedades" -> listOf(
+            CampoRegistro("Nombre de la enfermedad"),
+            CampoRegistro("Fecha del diagnóstico", esFecha = true),
+            CampoRegistro("Estado", listOf("Activa", "Controlada", "Resuelta")),
+            CampoRegistro("Tratamiento actual", requerido = false, unaLinea = false),
+            CampoRegistro("Notas", requerido = false, unaLinea = false)
+        )
+        "Hospitalizaciones" -> listOf(
+            CampoRegistro("Hospital"),
+            CampoRegistro("Fecha de ingreso", esFecha = true),
+            CampoRegistro("Fecha de alta", requerido = false, esFecha = true),
+            CampoRegistro("Motivo de hospitalización", unaLinea = false),
+            CampoRegistro("Diagnóstico", unaLinea = false),
+            CampoRegistro("Tratamiento o procedimiento", requerido = false, unaLinea = false),
+            CampoRegistro("Médico responsable", requerido = false)
+        )
+        else -> emptyList()
+    }
     val vacuna = listOf(
         CampoRegistro("Vacuna", listOf("Influenza", "COVID-19", "Hepatitis B", "Tétanos", "Otra")),
-        CampoRegistro("Fecha de aplicación"),
+        CampoRegistro("Fecha de aplicación", esFecha = true),
         CampoRegistro("Dosis", listOf("Primera dosis", "Segunda dosis", "Tercera dosis", "Refuerzo"), requerido = false),
         CampoRegistro("Lote o centro de salud", requerido = false)
     )
     val receta = listOf(
         CampoRegistro("Nombre del medicamento"), CampoRegistro("Dosis"),
         CampoRegistro("Frecuencia", listOf("Una vez al día", "Cada 12 horas", "Cada 8 horas", "Cada 6 horas", "Según indicación médica")),
-        CampoRegistro("Fecha de inicio", requerido = false),
+        CampoRegistro("Fecha de inicio", requerido = false, esFecha = true),
         CampoRegistro("Indicaciones", requerido = false, unaLinea = false)
     )
     val documento = listOf(
         CampoRegistro("Nombre del documento"),
         CampoRegistro("Tipo", listOf("Estudio", "Imagen", "Alta médica", "Reporte", "Otro")),
-        CampoRegistro("Fecha"), CampoRegistro("Nota", requerido = false, unaLinea = false)
+        CampoRegistro("Fecha", esFecha = true), CampoRegistro("Nota", requerido = false, unaLinea = false)
     )
 }
 
@@ -161,7 +206,15 @@ fun RegistroFormularioSheet(
             Text(titulo, fontSize = 20.sp, fontWeight = FontWeight.Bold)
 
             campos.forEach { campo ->
-                if (campo.opciones.isEmpty()) {
+                when {
+                    campo.esFecha -> CampoFechaRegistro(
+                        etiqueta = campo.etiqueta,
+                        valor = valores[campo.etiqueta].orEmpty(),
+                        onFechaSeleccionada = { valores[campo.etiqueta] = it },
+                        soloLectura = soloLectura,
+                        colores = coloresCampos
+                    )
+                    campo.opciones.isEmpty() -> {
                     OutlinedTextField(
                         value = valores[campo.etiqueta].orEmpty(),
                         onValueChange = { nuevoValor -> valores[campo.etiqueta] = nuevoValor },
@@ -171,7 +224,8 @@ fun RegistroFormularioSheet(
                         readOnly = soloLectura,
                         colors = coloresCampos
                     )
-                } else {
+                    }
+                    else -> {
                     var desplegableAbierto by remember(campo.etiqueta) { mutableStateOf(false) }
 
                     Box(modifier = Modifier.fillMaxWidth()) {
@@ -208,6 +262,7 @@ fun RegistroFormularioSheet(
                             }
                         }
                     }
+                }
                 }
             }
 
@@ -282,8 +337,101 @@ fun RegistroFormularioSheet(
     }
 }
 
+// Selector de calendario que guarda la fecha en formato ISO y evita escribirla manualmente.
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun CampoFechaRegistro(
+    etiqueta: String,
+    valor: String,
+    onFechaSeleccionada: (String) -> Unit,
+    soloLectura: Boolean,
+    colores: androidx.compose.material3.TextFieldColors
+) {
+    var calendarioAbierto by remember(etiqueta) { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = mostrarFechaLocalizada(valor),
+            onValueChange = {},
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(etiqueta) },
+            readOnly = true,
+            trailingIcon = { Text("▦", color = Color.White) },
+            colors = colores
+        )
+        Box(
+            modifier = Modifier.matchParentSize().clickable(enabled = !soloLectura) {
+                calendarioAbierto = true
+            }
+        )
+    }
+
+    if (calendarioAbierto) {
+        val estadoCalendario = rememberDatePickerState(
+            initialSelectedDateMillis = fechaIsoAMillisUtc(valor)
+        )
+        DatePickerDialog(
+            onDismissRequest = { calendarioAbierto = false },
+            confirmButton = {
+                TextButton(
+                    enabled = estadoCalendario.selectedDateMillis != null,
+                    onClick = {
+                        estadoCalendario.selectedDateMillis?.let { onFechaSeleccionada(fechaMillisAIsoUtc(it)) }
+                        calendarioAbierto = false
+                    }
+                ) { Text("Seleccionar", color = Color(0xFF17466B)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { calendarioAbierto = false }) {
+                    Text("Cancelar", color = Color(0xFF17466B))
+                }
+            },
+            colors = DatePickerDefaults.colors(
+                containerColor = Color(0xFF32B6AD),
+                titleContentColor = Color.White,
+                headlineContentColor = Color.White,
+                weekdayContentColor = Color(0xFF17466B),
+                dayContentColor = Color(0xFF263746),
+                selectedDayContainerColor = Color(0xFF17466B),
+                selectedDayContentColor = Color.White,
+                todayDateBorderColor = Color(0xFF17466B),
+                todayContentColor = Color(0xFF17466B)
+            )
+        ) {
+            DatePicker(state = estadoCalendario, showModeToggle = false)
+        }
+    }
+}
+
+// Muestra las fechas en formato día/mes/año, conservando el valor ISO para el registro.
+private fun mostrarFechaLocalizada(fechaIso: String): String {
+    val partes = fechaIso.split("-")
+    return if (partes.size == 3) "${partes[2]}/${partes[1]}/${partes[0]}" else fechaIso
+}
+
+// Convierte la fecha ISO a milisegundos UTC para inicializar el calendario.
+private fun fechaIsoAMillisUtc(fechaIso: String): Long? = runCatching {
+    val (anio, mes, dia) = fechaIso.split("-").map(String::toInt)
+    Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+        clear()
+        set(anio, mes - 1, dia)
+    }.timeInMillis
+}.getOrNull()
+
+// Convierte la selección del calendario al formato AAAA-MM-DD.
+private fun fechaMillisAIsoUtc(millis: Long): String {
+    val calendario = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = millis }
+    return String.format(
+        Locale.US,
+        "%04d-%02d-%02d",
+        calendario.get(Calendar.YEAR),
+        calendario.get(Calendar.MONTH) + 1,
+        calendario.get(Calendar.DAY_OF_MONTH)
+    )
+}
+
 // Crea un destino privado para la foto y expone su URI de forma segura a la cámara.
-private fun crearUriFoto(context: Context): Uri {
+internal fun crearUriFoto(context: Context): Uri {
     val directorioFotos = File(context.filesDir, "captured_images").apply { mkdirs() }
     val archivoFoto = File.createTempFile("cmd_", ".jpg", directorioFotos)
     return FileProvider.getUriForFile(
