@@ -246,10 +246,12 @@ fun RegistroFormularioSheet(
                         value = valores[campo.etiqueta].orEmpty(),
                         onValueChange = { nuevoValor ->
                             val maximo = if (limitarCaracteres) campo.maxCaracteres else null
-                            val valorPermitido = if (limitarCaracteres && campo.etiqueta in listOf("Nombre", "Apellidos")) {
-                                filtrarNombrePersona(nuevoValor)
-                            } else nuevoValor
-                            valores[campo.etiqueta] = maximo?.let(valorPermitido::take) ?: valorPermitido
+                            val caracteresValidos = if (limitarCaracteres && campo.etiqueta in listOf("Nombre", "Apellidos")) {
+                                nuevoValor.all { it.isLetter() || it.isWhitespace() || it in "-'’." }
+                            } else true
+                            if (caracteresValidos) {
+                                valores[campo.etiqueta] = maximo?.let(nuevoValor::take) ?: nuevoValor
+                            }
                         },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text(campo.etiqueta) },
@@ -438,10 +440,6 @@ private fun CampoOpcionesHaciaAbajo(
         }
     }
 }
-
-// Conserva letras y separadores habituales en nombres, quitando números y símbolos ajenos.
-private fun filtrarNombrePersona(valor: String): String =
-    valor.filter { it.isLetter() || it.isWhitespace() || it in "-'’." }
 
 // Selector de calendario que guarda la fecha en formato ISO y evita escribirla manualmente.
 @OptIn(ExperimentalMaterial3Api::class)
