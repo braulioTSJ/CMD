@@ -37,6 +37,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+private fun caracterCorreoPermitido(caracter: Char): Boolean =
+    caracter in 'a'..'z' || caracter in 'A'..'Z' || caracter in '0'..'9' || caracter in "._+-@"
+
+private fun caracterContrasenaPermitido(caracter: Char): Boolean =
+    caracter in ' '..'~' || caracter in "áéíóúüñÁÉÍÓÚÜÑ"
+
 // Pantalla de acceso demostrativa; el envío real de credenciales se conectará después.
 @Composable
 fun LoginScreen(onLogin: () -> Unit, modifier: Modifier = Modifier) {
@@ -106,7 +112,9 @@ fun LoginScreen(onLogin: () -> Unit, modifier: Modifier = Modifier) {
                 // Campo para escribir el correo electrónico.
                 OutlinedTextField(
                     value = email,
-                    onValueChange = { email = it },
+                    onValueChange = { nuevoValor ->
+                        email = nuevoValor.filter(::caracterCorreoPermitido).take(254)
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Correo electrónico") },
                     placeholder = { Text("nombre@correo.com") },
@@ -124,7 +132,9 @@ fun LoginScreen(onLogin: () -> Unit, modifier: Modifier = Modifier) {
                 // Campo seguro para escribir la contraseña.
                 OutlinedTextField(
                     value = password,
-                    onValueChange = { password = it },
+                    onValueChange = { nuevoValor ->
+                        password = nuevoValor.filter(::caracterContrasenaPermitido).take(128)
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Contraseña") },
                     singleLine = true,

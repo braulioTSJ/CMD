@@ -63,12 +63,10 @@ private val ResumenSubmodulos = listOf(
 fun ResumenMedicoScreen(
     selectedUserName: String,
     colorTarjetaPerfil: Color,
-    alergias: String = "No registrado",
-    tipoSangre: String = "No registrado",
+    resumen: ResumenMedicoData,
     modifier: Modifier = Modifier
 ) {
     var submoduloSeleccionado by remember { mutableStateOf<ResumenSubmodulo?>(null) }
-    val metodos = ResumenMedicoMetodos()
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -85,14 +83,14 @@ fun ResumenMedicoScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TarjetaResumenSubmodulo(
                     submodulo = ResumenSubmodulos[0],
-                    detalle = alergias,
+                    detalle = resumen.alergias,
                     modifier = Modifier.weight(1f)
                 ) {
                     submoduloSeleccionado = ResumenSubmodulos[0]
                 }
                 TarjetaResumenSubmodulo(
                     submodulo = ResumenSubmodulos[1],
-                    detalle = tipoSangre,
+                    detalle = resumen.tipoSangre,
                     modifier = Modifier.weight(1f)
                 ) {
                     submoduloSeleccionado = ResumenSubmodulos[1]
@@ -104,12 +102,14 @@ fun ResumenMedicoScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TarjetaResumenSubmodulo(
                     submodulo = ResumenSubmodulos[2],
+                    detalle = if (resumen.medicamentos.isEmpty()) "Sin datos" else "${resumen.medicamentos.size} registro(s)",
                     modifier = Modifier.weight(1f)
                 ) {
                     submoduloSeleccionado = ResumenSubmodulos[2]
                 }
                 TarjetaResumenSubmodulo(
                     submodulo = ResumenSubmodulos[3],
+                    detalle = if (resumen.antecedentes.isEmpty()) "Sin datos" else "${resumen.antecedentes.size} registro(s)",
                     modifier = Modifier.weight(1f)
                 ) {
                     submoduloSeleccionado = ResumenSubmodulos[3]
@@ -120,13 +120,26 @@ fun ResumenMedicoScreen(
 
     submoduloSeleccionado?.let { submodulo ->
         val cerrarAviso = { submoduloSeleccionado = null }
-        when (submodulo.nombre) {
-            "Alergias" -> metodos.mostrarAlergias(cerrarAviso)
-            "Tipo de sangre" -> metodos.mostrarTipoDeSangre(cerrarAviso)
-            "Medicamentos" -> metodos.mostrarMedicamentos(cerrarAviso)
-            "Antecedentes" -> metodos.mostrarAntecedentes(cerrarAviso)
-            else -> Unit
-        }
+        val datos = when (submodulo.nombre) {
+            "Alergias" -> listOf(resumen.alergias)
+            "Tipo de sangre" -> listOf(resumen.tipoSangre)
+            "Medicamentos" -> resumen.medicamentos
+            "Antecedentes" -> resumen.antecedentes
+            else -> emptyList()
+        }.filter { it.isNotBlank() && it != "No registrado" }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = cerrarAviso,
+            title = { Text(submodulo.nombre) },
+            text = {
+                if (datos.isEmpty()) Text("No hay información registrada para este perfil.")
+                else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    datos.forEach { dato -> Text("• $dato", color = ResumenInk) }
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = cerrarAviso) { Text("Cerrar") }
+            }
+        )
     }
 }
 

@@ -129,14 +129,7 @@ private fun CmdHomeScreen() {
 
     // Obtiene los datos médicos guardados para el perfil familiar seleccionado.
     val datosMedicosPerfil = perfilActivo?.datos
-    val alergiasPerfil = datosMedicosPerfil?.get("Alergias")
-        ?.takeIf { it.isNotBlank() } ?: "No registrado"
-    val tipoSangrePerfil = datosMedicosPerfil?.get("Tipo de sangre")
-        ?.takeIf { it.isNotBlank() }
-        ?: when (perfilSeleccionado) {
-            "Mamá" -> "O+"
-            else -> "No registrado"
-        }
+    val resumenPerfil = ResumenMedicoMetodos().obtenerResumen(nombrePerfilSeleccionado, datosMedicosPerfil)
 
     // Cambia el degradado de fondo según el módulo que esté abierto.
     val fondoDegradado = when (selectedTab) {
@@ -265,6 +258,7 @@ private fun CmdHomeScreen() {
                                 },
                                 onProfileDeleted = { perfil ->
                                     perfilesFamiliares.removeAll { it.id == perfil.id }
+                                    MetodosHistorial().eliminarPerfil(perfil.nombre)
                                     if (perfilSeleccionado == perfil.id) {
                                         perfilSeleccionado = perfilesFamiliares.firstOrNull()?.id.orEmpty()
                                     }
@@ -281,8 +275,7 @@ private fun CmdHomeScreen() {
                             2 -> ResumenMedicoScreen(
                                 selectedUserName = nombrePerfilSeleccionado,
                                 colorTarjetaPerfil = colorTarjetaPerfil,
-                                alergias = alergiasPerfil,
-                                tipoSangre = tipoSangrePerfil,
+                                resumen = resumenPerfil,
                                 modifier = Modifier.fillMaxSize()
                             )
 

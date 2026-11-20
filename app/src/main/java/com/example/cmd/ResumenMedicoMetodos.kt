@@ -1,48 +1,53 @@
 package com.example.cmd
 
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
+/** Datos calculados para la ficha de resumen del perfil seleccionado. */
+data class ResumenMedicoData(
+    val alergias: String,
+    val tipoSangre: String,
+    val medicamentos: List<String>,
+    val antecedentes: List<String>
+)
 
-// Métodos para abrir cada submódulo de Resumen médico.
-class ResumenMedicoMetodos {
-    // Muestra el apartado de Alergias.
-    @Composable
-    fun mostrarAlergias(onCerrar: () -> Unit) {
-        mostrarAviso("Alergias", onCerrar)
-    }
-
-    // Muestra el apartado de Tipo de sangre.
-    @Composable
-    fun mostrarTipoDeSangre(onCerrar: () -> Unit) {
-        mostrarAviso("Tipo de sangre", onCerrar)
-    }
-
-    // Muestra el apartado de Medicamentos.
-    @Composable
-    fun mostrarMedicamentos(onCerrar: () -> Unit) {
-        mostrarAviso("Medicamentos", onCerrar)
-    }
-
-    // Muestra el apartado de Antecedentes.
-    @Composable
-    fun mostrarAntecedentes(onCerrar: () -> Unit) {
-        mostrarAviso("Antecedentes", onCerrar)
-    }
-
-    // Presenta el aviso provisional compartido por los submódulos.
-    @Composable
-    private fun mostrarAviso(nombreSubmodulo: String, onCerrar: () -> Unit) {
-        AlertDialog(
-            onDismissRequest = onCerrar,
-            title = { Text(nombreSubmodulo) },
-            text = { Text("Este submódulo aún está en preparación.") },
-            confirmButton = {
-                TextButton(onClick = onCerrar) {
-                    Text("Cerrar")
+/** Capa de consulta en memoria; se puede sustituir por una API/base local más adelante. */
+class ResumenMedicoMetodos(
+    private val historial: MetodosHistorial = MetodosHistorial()
+) {
+    fun obtenerResumen(nombrePerfil: String, datosPerfil: Map<String, String>?): ResumenMedicoData {
+        val registros = historial.consultarTodos(nombrePerfil)
+        val medicamentos = registros.filterIsInstance<EnfermedadRegistro>()
+            .filter { !it.estado.equals("Resuelta", ignoreCase = true) }
+            .mapNotNull { registro ->
+                registro.tratamientoActual.trim().takeIf(String::isNotBlank)?.let {
+                    "${registro.nombreEnfermedad}: $it"
                 }
             }
+            .distinct()
+
+        val antecedentes = registros.mapNotNull(::describirAntecedente)
+
+        return ResumenMedicoData(
+            alergias = datosPerfil?.get("Alergias").valorOMensaje(),
+            tipoSangre = datosPerfil?.get("Tipo de sangre").valorOMensaje(),
+            medicamentos = medicamentos,
+            antecedentes = antecedentes
         )
     }
+
+    private fun describirAntecedente(registro: RegistroHistorialBase): String? {
+        val tipo = when (registro) {
+            is AccidenteRegistro -> "Accidente"
+            is CirugiaRegistro -> "Cirugía"
+            is ConsultaRegistro -> "Consulta"
+            is EnfermedadRegistro -> "Enfermedad"
+            is HospitalizacionRegistro -> "Hospitalización"
+            else -> return null
+        }
+        val detalle = registro.resumen.trim()
+        return "$tipo · ${registro.fechaRegistro}" + if (detalle.isBlank()) "" else " · $detalle"
+    }
+
+    private fun String?.valorOMensaje(): String = this
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?: "No registrado"
 }

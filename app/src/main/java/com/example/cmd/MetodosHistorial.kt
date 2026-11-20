@@ -99,6 +99,22 @@ object RepositorioHistorialLocal {
     fun consultarEnfermedades(perfil: String) = enfermedades.delPerfil(perfil)
     fun consultarHospitalizaciones(perfil: String) = hospitalizaciones.delPerfil(perfil)
 
+    fun consultarTodos(perfil: String): List<RegistroHistorialBase> = buildList {
+        addAll(consultarAccidentes(perfil))
+        addAll(consultarCirugias(perfil))
+        addAll(consultarConsultas(perfil))
+        addAll(consultarEnfermedades(perfil))
+        addAll(consultarHospitalizaciones(perfil))
+    }.sortedByDescending { it.fechaRegistro }
+
+    fun eliminarPerfil(perfil: String) {
+        accidentes.removeAll { it.perfilNombre == perfil }
+        cirugias.removeAll { it.perfilNombre == perfil }
+        consultas.removeAll { it.perfilNombre == perfil }
+        enfermedades.removeAll { it.perfilNombre == perfil }
+        hospitalizaciones.removeAll { it.perfilNombre == perfil }
+    }
+
     fun agregarAccidente(registro: AccidenteRegistro) { accidentes.add(registro.copy(idLocal = siguienteId.getAndIncrement())) }
     fun agregarCirugia(registro: CirugiaRegistro) { cirugias.add(registro.copy(idLocal = siguienteId.getAndIncrement())) }
     fun agregarConsulta(registro: ConsultaRegistro) { consultas.add(registro.copy(idLocal = siguienteId.getAndIncrement())) }
@@ -161,6 +177,8 @@ class MetodosHistorial {
     fun consultarConsultas(perfil: String) = RepositorioHistorialLocal.consultarConsultas(perfil)
     fun consultarEnfermedades(perfil: String) = RepositorioHistorialLocal.consultarEnfermedades(perfil)
     fun consultarHospitalizaciones(perfil: String) = RepositorioHistorialLocal.consultarHospitalizaciones(perfil)
+    fun consultarTodos(perfil: String) = RepositorioHistorialLocal.consultarTodos(perfil)
+    fun eliminarPerfil(perfil: String) = RepositorioHistorialLocal.eliminarPerfil(perfil)
 
     fun agregarAccidente(registro: AccidenteRegistro) = RepositorioHistorialLocal.agregarAccidente(registro)
     fun agregarCirugia(registro: CirugiaRegistro) = RepositorioHistorialLocal.agregarCirugia(registro)
