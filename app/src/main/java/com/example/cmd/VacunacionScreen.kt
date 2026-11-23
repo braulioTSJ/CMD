@@ -124,7 +124,6 @@ fun VacunacionScreen(
         RegistroFormularioSheet(
             titulo = "Agregar vacuna",
             campos = FormulariosRegistro.vacuna,
-            permitirFoto = true,
             onCerrar = { mostrarFormularioVacuna = false },
             onGuardar = { datos ->
                 RegistroLocalStore.agregar("Vacunación", datos)

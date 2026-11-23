@@ -70,7 +70,7 @@ object FormulariosRegistro {
     val familiar = listOf(
         CampoRegistro("Nombre", maxCaracteres = 50),
         CampoRegistro("Apellidos", maxCaracteres = 50),
-        CampoRegistro("Parentesco", listOf("Madre", "Padre", "Hijo", "Hija", "Pareja", "Otro"), maxCaracteres = 50),
+        CampoRegistro("Parentesco", listOf("Madre", "Padre", "Hermano/a", "Hijo", "Hija", "Pareja", "Otro"), maxCaracteres = 50),
         CampoRegistro("Fecha de nacimiento", esFecha = true),
         CampoRegistro("Sexo", listOf("Masculino", "Femenino", "Otro")),
         CampoRegistro("Tipo de sangre", listOf("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"), requerido = false, maxCaracteres = 10),
@@ -157,6 +157,7 @@ fun RegistroFormularioSheet(
     onGuardar: (Map<String, String>) -> Unit = {},
     valoresIniciales: Map<String, String> = emptyMap(),
     soloLectura: Boolean = false,
+    onEditarLectura: (() -> Unit)? = null,
     permitirFoto: Boolean = false,
     limitarCaracteres: Boolean = false,
     desplegablesHaciaAbajo: Boolean = false,
@@ -203,16 +204,22 @@ fun RegistroFormularioSheet(
         .joinToString(" ")
     val nombreDentroDelLimite = !limitarCaracteres || nombreCompleto.length <= 150
     val nombreValido = !limitarCaracteres || listOf("Nombre", "Apellidos").all { etiqueta ->
-        valores[etiqueta].orEmpty().all { it.isLetter() || it.isWhitespace() || it in "-'’." }
+        val valor = valores[etiqueta].orEmpty()
+        valor.all { it.isLetter() || it.isWhitespace() || it in "-'’." } && (valor.isBlank() || valor.any(Char::isLetter))
     }
     val fechasValidas = !limitarCaracteres || campos.filter { it.esFecha }.all { campo ->
-        esFechaDentroDeLimites(valores[campo.etiqueta].orEmpty(), fechaMinimaIso, fechaMaximaIso)
+        val fecha = valores[campo.etiqueta].orEmpty()
+        (!campo.requerido && fecha.isBlank()) || esFechaDentroDeLimites(fecha, fechaMinimaIso, fechaMaximaIso)
     }
     val fotoDentroDelLimite = !limitarCaracteres || (fotoUri?.toString()?.length ?: 0) <= 255
+    val camposDentroDelLimite = !limitarCaracteres || campos.all { campo ->
+        val valor = valores[campo.etiqueta].orEmpty()
+        campo.maxCaracteres == null || valor.length <= campo.maxCaracteres
+    }
     val formularioValido = campos
         .filter { it.requerido }
         .all { valores[it.etiqueta].orEmpty().isNotBlank() }
-        .and(nombreDentroDelLimite && nombreValido && fechasValidas && fotoDentroDelLimite)
+        .and(nombreDentroDelLimite && nombreValido && fechasValidas && fotoDentroDelLimite && camposDentroDelLimite)
 
     ModalBottomSheet(
         onDismissRequest = onCerrar,
@@ -246,12 +253,11 @@ fun RegistroFormularioSheet(
                         value = valores[campo.etiqueta].orEmpty(),
                         onValueChange = { nuevoValor ->
                             val maximo = if (limitarCaracteres) campo.maxCaracteres else null
-                            val caracteresValidos = if (limitarCaracteres && campo.etiqueta in listOf("Nombre", "Apellidos")) {
-                                nuevoValor.all { it.isLetter() || it.isWhitespace() || it in "-'’." }
-                            } else true
-                            if (caracteresValidos) {
-                                valores[campo.etiqueta] = maximo?.let(nuevoValor::take) ?: nuevoValor
-                            }
+                            val esNombre = campo.etiqueta in listOf("Nombre", "Apellidos")
+                            val valorSeguro = if (limitarCaracteres && esNombre) {
+                                nuevoValor.filter { it.isLetter() || it.isWhitespace() || it in "-'’." }
+                            } else nuevoValor
+                            valores[campo.etiqueta] = maximo?.let(valorSeguro::take) ?: valorSeguro
                         },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text(campo.etiqueta) },
@@ -270,7 +276,7 @@ fun RegistroFormularioSheet(
                             etiqueta = campo.etiqueta,
                             valor = valores[campo.etiqueta].orEmpty(),
                             opciones = campo.opciones,
-                            colorFondo = Color(0xFF1F7288),
+                            colorFondo = Color(0xFF155E75),
                             onSeleccion = { valores[campo.etiqueta] = it }
                         )
                     } else {
@@ -340,15 +346,19 @@ fun RegistroFormularioSheet(
             Spacer(Modifier.height(4.dp))
 
             if (soloLectura) {
-                Button(
-                    onClick = onCerrar,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF17466B),
-                        contentColor = Color.White
-                    )
-                ) {
-                    Text("Cerrar")
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TextButton(
+                        onClick = onCerrar,
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        colors = ButtonDefaults.textButtonColors(contentColor = Color.White)
+                    ) { Text("Cerrar", fontSize = 16.sp) }
+                    if (onEditarLectura != null) {
+                        Button(
+                            onClick = onEditarLectura,
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF17466B), contentColor = Color.White)
+                        ) { Text("Editar", fontSize = 16.sp) }
+                    }
                 }
             } else {
                 Row(

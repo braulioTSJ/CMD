@@ -68,7 +68,7 @@ private val HistorialTealTranslucido = Color(0xD832B6AD)
 private data class SubmoduloHistorial(val nombre: String, val icono: Int)
 
 private val SubmodulosHistorial = listOf(
-    SubmoduloHistorial("Accidentes", R.drawable.accidente),
+    SubmoduloHistorial("Eventos", R.drawable.accidente),
     SubmoduloHistorial("Cirugías", R.drawable.bisturi),
     SubmoduloHistorial("Consultas", R.drawable.estetoscopio),
     SubmoduloHistorial("Enfermedades", R.drawable.enfermedades),
@@ -81,7 +81,8 @@ private val SubmodulosHistorial = listOf(
 fun HistorialScreen(
     selectedUserName: String,
     colorTarjetaPerfil: Color,
-    selectedProfileId: Int? = null,
+    selectedProfileId: String = selectedUserName,
+    selectedProfileBirthDate: String? = null,
     modifier: Modifier = Modifier
 ) {
     var submoduloAbierto by remember { mutableStateOf<String?>(null) }
@@ -114,7 +115,7 @@ fun HistorialScreen(
     submoduloAbierto?.let { modulo ->
         HojaRegistrosHistorial(
             nombreSubmodulo = modulo,
-            registros = metodos.consultarPorSubmodulo(selectedUserName, modulo),
+            registros = metodos.consultarPorSubmodulo(selectedProfileId, modulo),
             onCerrar = { submoduloAbierto = null },
             onConsultar = { registroConsultado = it; fotoVisibleEnConsulta = false },
             onEditar = { registroEditando = it; formularioAbierto = modulo; submoduloAbierto = null },
@@ -124,23 +125,23 @@ fun HistorialScreen(
 
     formularioAbierto?.let { modulo ->
         when (modulo) {
-            "Accidentes" -> FormularioAccidente(selectedUserName, registroEditando as? AccidenteRegistro, { cerrarFormulario { formularioAbierto = null; registroEditando = null } }) { registro ->
+            "Eventos" -> FormularioAccidente(selectedUserName, registroEditando as? AccidenteRegistro, { cerrarFormulario { formularioAbierto = null; registroEditando = null } }, fechaNacimientoPerfil = selectedProfileBirthDate, perfilId = selectedProfileId) { registro ->
                 if (registroEditando == null) metodos.agregarAccidente(registro) else metodos.actualizarAccidente(registro)
                 formularioAbierto = null; registroEditando = null
             }
-            "Cirugías" -> FormularioCirugia(selectedUserName, registroEditando as? CirugiaRegistro, { formularioAbierto = null; registroEditando = null }) { registro ->
+            "Cirugías" -> FormularioCirugia(selectedUserName, registroEditando as? CirugiaRegistro, { formularioAbierto = null; registroEditando = null }, fechaNacimientoPerfil = selectedProfileBirthDate, perfilId = selectedProfileId) { registro ->
                 if (registroEditando == null) metodos.agregarCirugia(registro) else metodos.actualizarCirugia(registro)
                 formularioAbierto = null; registroEditando = null
             }
-            "Consultas" -> FormularioConsulta(selectedUserName, registroEditando as? ConsultaRegistro, { formularioAbierto = null; registroEditando = null }) { registro ->
+            "Consultas" -> FormularioConsulta(selectedUserName, registroEditando as? ConsultaRegistro, { formularioAbierto = null; registroEditando = null }, fechaNacimientoPerfil = selectedProfileBirthDate, perfilId = selectedProfileId) { registro ->
                 if (registroEditando == null) metodos.agregarConsulta(registro) else metodos.actualizarConsulta(registro)
                 formularioAbierto = null; registroEditando = null
             }
-            "Enfermedades" -> FormularioEnfermedad(selectedUserName, registroEditando as? EnfermedadRegistro, { formularioAbierto = null; registroEditando = null }) { registro ->
+            "Enfermedades" -> FormularioEnfermedad(selectedUserName, registroEditando as? EnfermedadRegistro, { formularioAbierto = null; registroEditando = null }, fechaNacimientoPerfil = selectedProfileBirthDate, perfilId = selectedProfileId) { registro ->
                 if (registroEditando == null) metodos.agregarEnfermedad(registro) else metodos.actualizarEnfermedad(registro)
                 formularioAbierto = null; registroEditando = null
             }
-            "Hospitalizaciones" -> FormularioHospitalizacion(selectedUserName, registroEditando as? HospitalizacionRegistro, { formularioAbierto = null; registroEditando = null }) { registro ->
+            "Hospitalizaciones" -> FormularioHospitalizacion(selectedUserName, registroEditando as? HospitalizacionRegistro, { formularioAbierto = null; registroEditando = null }, fechaNacimientoPerfil = selectedProfileBirthDate, perfilId = selectedProfileId) { registro ->
                 if (registroEditando == null) metodos.agregarHospitalizacion(registro) else metodos.actualizarHospitalizacion(registro)
                 formularioAbierto = null; registroEditando = null
             }
@@ -177,7 +178,7 @@ private fun cerrarFormulario(cerrar: () -> Unit) = cerrar()
 
 // Devuelve el nombre legible del submódulo del registro para el mensaje de confirmación.
 private fun nombreSubmodulo(registro: RegistroHistorialBase): String = when (registro) {
-    is AccidenteRegistro -> "Accidentes"
+    is AccidenteRegistro -> "Eventos"
     is CirugiaRegistro -> "Cirugías"
     is ConsultaRegistro -> "Consultas"
     is EnfermedadRegistro -> "Enfermedades"
@@ -189,8 +190,8 @@ private fun nombreSubmodulo(registro: RegistroHistorialBase): String = when (reg
 @Composable
 private fun EncabezadoHistorial() {
     Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("Historial médico", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-        Text("Consultas y antecedentes de salud", color = Color.White.copy(alpha = .9f), fontSize = 12.sp, textAlign = TextAlign.Center)
+        Text("Historial médico", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text("Consultas y antecedentes de salud", color = Color.White.copy(alpha = .9f), fontSize = 15.sp, textAlign = TextAlign.Center)
     }
 }
 
@@ -199,7 +200,7 @@ private fun EncabezadoHistorial() {
 private fun TarjetaSubmodulo(submodulo: SubmoduloHistorial, onAdd: () -> Unit, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Card(
-            modifier = Modifier.weight(1f).height(68.dp).clickable(onClick = onClick),
+            modifier = Modifier.weight(1f).height(74.dp).clickable(onClick = onClick),
             shape = RoundedCornerShape(14.dp),
             colors = CardDefaults.cardColors(containerColor = HistorialCardSurface),
             elevation = CardDefaults.cardElevation(0.dp),
@@ -210,7 +211,7 @@ private fun TarjetaSubmodulo(submodulo: SubmoduloHistorial, onAdd: () -> Unit, o
                     Image(painterResource(submodulo.icono), submodulo.nombre, Modifier.size(26.dp), contentScale = ContentScale.Fit, colorFilter = ColorFilter.tint(HistorialNavy))
                 }
                 Spacer(Modifier.width(12.dp))
-                Text(submodulo.nombre, color = HistorialInk, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(submodulo.nombre, color = HistorialInk, fontSize = 17.sp, fontWeight = FontWeight.Medium)
             }
         }
         Button(

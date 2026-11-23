@@ -41,6 +41,9 @@ private val CmdTeal = Color(0xFF20A199)
 // Transparencia de los elementos de navegación que no están seleccionados.
 private val UnselectedNavigationAlpha = .8f
 
+// Identificador estable del perfil propietario de la cuenta.
+private const val SuperUserProfileId = "superusuario"
+
 // Modelo simple para guardar el nombre y el icono de cada pestaña.
 private data class NavigationDestination(
     val label: String,
@@ -85,17 +88,30 @@ class MainActivity : ComponentActivity() {
 // Contenedor de la aplicación: fondo degradado, contenido y navegación inferior.
 @Composable
 private fun CmdHomeScreen() {
-    // Controla si se muestra el borrador de acceso o la pantalla principal.
-    var showHome by remember { mutableStateOf(false) }
-
     // Guarda cuál pestaña de la barra inferior está seleccionada.
     var selectedTab by remember { mutableIntStateOf(0) }
 
     // Recuerda la pestaña anterior para volver desde Seguridad/Configuración.
     var pestanaAnterior by remember { mutableIntStateOf(0) }
 
-    // Conserva el perfil familiar elegido al cambiar entre pestañas.
-    var perfilSeleccionado by remember { mutableStateOf("Mamá") }
+    // Un valor vacío significa que no hay familiar activo y se usa el superusuario.
+    var perfilSeleccionado by remember { mutableStateOf("") }
+    var datosSuperUsuario by remember {
+        mutableStateOf(
+            mapOf(
+                "Nombre" to "Braulio",
+                "Apellidos" to "Castillo",
+                "Nombre completo" to "Braulio Castillo",
+                "Rol" to "Superusuario",
+                "Correo electrónico" to "",
+                "Teléfono" to "",
+                "Fecha de nacimiento" to "",
+                "Sexo" to "",
+                "Tipo de sangre" to "O+",
+                "Alergias" to ""
+            )
+        )
+    }
     val perfilesFamiliares = remember {
         mutableStateListOf(
             PerfilFamiliarDemo(
@@ -123,12 +139,16 @@ private fun CmdHomeScreen() {
         )
     }
 
-    // Convierte la relación familiar seleccionada en el nombre visible del perfil.
+    // Resuelve al familiar elegido; si no existe o no hay uno elegido, se usa el superusuario.
     val perfilActivo = perfilesFamiliares.firstOrNull { it.id == perfilSeleccionado }
-    val nombrePerfilSeleccionado = perfilActivo?.nombre.orEmpty()
+    val esPerfilPropio = perfilActivo == null
+    val nombrePerfilSeleccionado = if (esPerfilPropio) {
+        datosSuperUsuario["Nombre completo"].orEmpty().ifBlank { "Mi perfil" }
+    } else perfilActivo?.nombre.orEmpty()
 
-    // Obtiene los datos médicos guardados para el perfil familiar seleccionado.
-    val datosMedicosPerfil = perfilActivo?.datos
+    // Comparte el perfil activo con las pestañas médicas y sus formularios.
+    val datosMedicosPerfil = if (esPerfilPropio) datosSuperUsuario else perfilActivo?.datos.orEmpty()
+    val idPerfilActivo = perfilActivo?.id ?: SuperUserProfileId
     val resumenPerfil = ResumenMedicoMetodos().obtenerResumen(nombrePerfilSeleccionado, datosMedicosPerfil)
 
     // Cambia el degradado de fondo según el módulo que esté abierto.
@@ -181,13 +201,8 @@ private fun CmdHomeScreen() {
         Box(
             modifier = Modifier.fillMaxSize().background(fondoDegradado)
         ) {
-            // Muestra primero el acceso; tras pulsar el botón se abre el inicio de demostración.
-            if (!showHome) {
-                // Formulario de acceso visual creado en Login.kt.
-                LoginScreen(onLogin = { showHome = true })
-            } else {
-                // Scaffold transparente para que se vea el fondo del Box.
-                Scaffold(
+            // Scaffold transparente para mostrar Inicio directamente al abrir la app.
+            Scaffold(
                 modifier = Modifier.fillMaxSize(),
                 containerColor = Color.Transparent,
 
@@ -250,17 +265,22 @@ private fun CmdHomeScreen() {
                             0 -> InicioScreen(
                                 selectedMember = perfilSeleccionado,
                                 onMemberSelected = { perfilSeleccionado = it },
+                                datosSuperUsuario = datosSuperUsuario,
+                                onSuperUsuarioActualizado = { nuevosDatos -> datosSuperUsuario = nuevosDatos },
                                 perfilesAgregados = perfilesFamiliares,
                                 onProfileAdded = { perfil -> perfilesFamiliares.add(perfil) },
                                 onProfileUpdated = { perfil ->
                                     val index = perfilesFamiliares.indexOfFirst { it.id == perfil.id }
-                                    if (index >= 0) perfilesFamiliares[index] = perfil
+                                    if (index >= 0) {
+                                        MetodosHistorial().actualizarNombrePerfil(perfil.id, perfil.nombre)
+                                        perfilesFamiliares[index] = perfil
+                                    }
                                 },
                                 onProfileDeleted = { perfil ->
                                     perfilesFamiliares.removeAll { it.id == perfil.id }
-                                    MetodosHistorial().eliminarPerfil(perfil.nombre)
+                                    MetodosHistorial().eliminarPerfil(perfil.id)
                                     if (perfilSeleccionado == perfil.id) {
-                                        perfilSeleccionado = perfilesFamiliares.firstOrNull()?.id.orEmpty()
+                                        perfilSeleccionado = ""
                                     }
                                 },
                                 modifier = Modifier.fillMaxSize()
@@ -269,6 +289,8 @@ private fun CmdHomeScreen() {
                             1 -> HistorialScreen(
                                 selectedUserName = nombrePerfilSeleccionado,
                                 colorTarjetaPerfil = colorTarjetaPerfil,
+                                selectedProfileId = idPerfilActivo,
+                                selectedProfileBirthDate = datosMedicosPerfil?.get("Fecha de nacimiento"),
                                 modifier = Modifier.fillMaxSize()
                             )
 
@@ -330,7 +352,6 @@ private fun CmdHomeScreen() {
                         }
                     }
                 }
-            }
         }
     }
 }

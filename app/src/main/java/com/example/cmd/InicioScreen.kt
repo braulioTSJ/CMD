@@ -5,8 +5,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,12 +22,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Calendar
 
 // Azul oscuro usado para títulos y detalles importantes.
 private val Navy = Color(0xFF17466B)
-
-// Turquesa usado como color de acento de la marca CMD.
-private val Teal = Color(0xFF32B6AD)
 
 // Color principal para textos sobre fondos claros.
 private val Ink = Color(0xFF263746)
@@ -49,11 +45,37 @@ private val SoftMint = Color(0xBAE8F5F2)
 // Nombre demostrativo usado en el encabezado.
 private const val DemoUserName = "Braulio Castillo"
 
+// Adapta perfiles guardados antes de separar nombre y apellidos.
+private fun datosFamiliaresEditables(datos: Map<String, String>): Map<String, String> {
+    val nombreCompleto = datos["Nombre completo"].orEmpty().trim().split(Regex("\\s+"))
+    val nombre = datos["Nombre"].orEmpty().ifBlank { nombreCompleto.firstOrNull().orEmpty() }
+    val apellidos = datos["Apellidos"].orEmpty().ifBlank { nombreCompleto.drop(1).joinToString(" ") }
+    val sangreOriginal = datos["Tipo de sangre"].orEmpty()
+    val sangreNormalizada = Regex(".*\\(([^()]*)\\).*").find(sangreOriginal)?.groupValues?.get(1) ?: sangreOriginal
+    return datos.toMutableMap().apply {
+        put("Nombre", nombre)
+        put("Apellidos", apellidos)
+        put("Sexo", datos["Sexo"].orEmpty().ifBlank { datos["Genero"].orEmpty() })
+        put("Tipo de sangre", sangreNormalizada.takeUnless { it == "No registrado" }.orEmpty())
+    }
+}
 data class PerfilFamiliarDemo(
     val id: String,
     val nombre: String,
     val parentesco: String,
     val datos: Map<String, String>
+)
+
+// Datos y acciones de cada tarjeta dentro de la cuadrícula de perfiles.
+private data class PerfilTileItem(
+    val id: String,
+    val nombre: String,
+    val seleccionado: Boolean,
+    val alSeleccionar: () -> Unit,
+    val alVer: () -> Unit,
+    val alEditar: () -> Unit,
+    val alEliminar: () -> Unit,
+    val permiteEliminar: Boolean
 )
 
 // Calcula las iniciales del nombre una sola vez por valor de usuario.
@@ -66,11 +88,31 @@ private fun initialsFor(name: String): String = name
     .joinToString("")
     .ifBlank { "?" }
 
+// Calcula la edad cumplida usando la fecha de nacimiento guardada en formato ISO.
+private fun calcularEdad(fechaIso: String): Int? = runCatching {
+    val partes = fechaIso.split("-").map(String::toInt)
+    require(partes.size == 3)
+    val nacimiento = Calendar.getInstance().apply {
+        isLenient = false
+        clear()
+        set(partes[0], partes[1] - 1, partes[2])
+    }
+    val hoy = Calendar.getInstance()
+    require(!nacimiento.after(hoy))
+    var edad = hoy.get(Calendar.YEAR) - nacimiento.get(Calendar.YEAR)
+    val antesDelCumpleanos = hoy.get(Calendar.MONTH) < nacimiento.get(Calendar.MONTH) ||
+        (hoy.get(Calendar.MONTH) == nacimiento.get(Calendar.MONTH) && hoy.get(Calendar.DAY_OF_MONTH) < nacimiento.get(Calendar.DAY_OF_MONTH))
+    if (antesDelCumpleanos) edad--
+    edad.takeIf { it >= 0 }
+}.getOrNull()
+
 // Pantalla de inicio con perfil familiar, accesos y próxima cita.
 @Composable
 fun InicioScreen(
     selectedMember: String,
     onMemberSelected: (String) -> Unit,
+    datosSuperUsuario: Map<String, String> = mapOf("Nombre" to "Braulio", "Apellidos" to "Castillo", "Nombre completo" to DemoUserName, "Rol" to "Superusuario"),
+    onSuperUsuarioActualizado: (Map<String, String>) -> Unit = {},
     perfilesAgregados: List<PerfilFamiliarDemo> = emptyList(),
     onProfileAdded: (PerfilFamiliarDemo) -> Unit = {},
     onProfileUpdated: (PerfilFamiliarDemo) -> Unit = {},
@@ -79,21 +121,20 @@ fun InicioScreen(
 ) {
     var mostrarAltaFamiliar by remember { mutableStateOf(false) }
     var perfilEditando by remember { mutableStateOf<PerfilFamiliarDemo?>(null) }
+    var editarSuperUsuario by remember { mutableStateOf(false) }
     var datosPerfilAbierto by remember { mutableStateOf<Map<String, String>?>(null) }
-    val datosSuperUsuario = mapOf(
-        "Nombre completo" to DemoUserName,
-        "Rol" to "Superusuario",
-        "Correo electrónico" to "No configurado",
-        "Teléfono" to "No configurado",
-        "Tipo de sangre" to "O+",
-        "Alergias" to "No registrado"
-    )
     // Lista desplazable con fondo de la pantalla.
     LazyColumn(
         modifier = modifier.fillMaxSize(),
     ) {
         // Encabezado de bienvenida y datos del usuario.
-        item { Header(onViewProfile = { datosPerfilAbierto = datosSuperUsuario }) }
+        item {
+            Header(
+                nombreUsuario = datosSuperUsuario["Nombre completo"].orEmpty().ifBlank { DemoUserName },
+                fechaNacimiento = datosSuperUsuario["Fecha de nacimiento"].orEmpty(),
+                tipoSangre = datosSuperUsuario["Tipo de sangre"].orEmpty()
+            )
+        }
 
         // Contenido principal de la pantalla.
         item {
@@ -101,19 +142,17 @@ fun InicioScreen(
                 // Selector sencillo de perfiles familiares.
                 FamilyCard(
                     selectedMember = selectedMember,
+                    superUserName = datosSuperUsuario["Nombre completo"].orEmpty(),
                     perfilesAgregados = perfilesAgregados,
                     onSelect = onMemberSelected,
                     onAdd = { mostrarAltaFamiliar = true },
                     onDetails = { datosPerfilAbierto = it },
+                    onSuperUserDetails = { datosPerfilAbierto = datosSuperUsuario },
+                    onEditSuperUser = { editarSuperUsuario = true },
                     onEdit = { perfilEditando = it },
                     onDelete = onProfileDeleted
                 )
 
-                // Separa la tarjeta familiar de la próxima cita.
-                Spacer(Modifier.height(10.dp))
-
-                // Muestra un resumen de la cita más cercana.
-                AppointmentCard()
             }
         }
     }
@@ -123,16 +162,25 @@ fun InicioScreen(
         RegistroFormularioSheet(
             titulo = if (perfilActual == null) "Agregar familiar" else "Editar perfil",
             campos = FormulariosRegistro.familiar,
-            valoresIniciales = perfilActual?.datos.orEmpty(),
-            permitirFoto = true,
+            valoresIniciales = perfilActual?.datos?.let(::datosFamiliaresEditables).orEmpty(),
+            limitarCaracteres = true,
+            desplegablesHaciaAbajo = true,
+            fechaMinimaIso = "1900-01-01",
+            fechaMaximaIso = fechaHoyIso(),
+            colorFondo = Color(0xFF247F93),
             onCerrar = { mostrarAltaFamiliar = false; perfilEditando = null },
             onGuardar = { datos ->
-                val nombre = datos["Nombre completo"].orEmpty().trim()
+                val datosCompletos = datos.toMutableMap()
+                val nombre = listOf(datos["Nombre"], datos["Apellidos"]).filterNotNull()
+                    .map { it.trim().replace(Regex("\\s+"), " ") }.filter(String::isNotBlank).joinToString(" ")
+                datosCompletos["Nombre"] = datos["Nombre"].orEmpty().trim().replace(Regex("\\s+"), " ")
+                datosCompletos["Apellidos"] = datos["Apellidos"].orEmpty().trim().replace(Regex("\\s+"), " ")
+                datosCompletos["Nombre completo"] = nombre
                 val perfil = PerfilFamiliarDemo(
-                    id = perfilActual?.id ?: "familiar_${System.currentTimeMillis()}",
+                    id = perfilActual?.id ?: "familiar_${java.util.UUID.randomUUID()}",
                     nombre = nombre,
                     parentesco = datos["Parentesco"].orEmpty(),
-                    datos = datos
+                    datos = datosCompletos
                 )
                 if (perfilActual == null) {
                     onProfileAdded(perfil)
@@ -146,34 +194,72 @@ fun InicioScreen(
         )
     }
 
+    if (editarSuperUsuario) {
+        val camposSuperUsuario = listOf(
+            CampoRegistro("Nombre", maxCaracteres = 50),
+            CampoRegistro("Apellidos", maxCaracteres = 50),
+            CampoRegistro("Correo electrónico", requerido = false, maxCaracteres = 150),
+            CampoRegistro("Teléfono", requerido = false, maxCaracteres = 20),
+            CampoRegistro("Fecha de nacimiento", esFecha = true),
+            CampoRegistro("Sexo", listOf("Masculino", "Femenino", "Otro"), requerido = false),
+            CampoRegistro("Tipo de sangre", listOf("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"), requerido = false, maxCaracteres = 10),
+            CampoRegistro("Alergias", requerido = false, unaLinea = false, maxCaracteres = 500)
+        )
+        RegistroFormularioSheet(
+            titulo = "Editar mi perfil",
+            campos = camposSuperUsuario,
+            valoresIniciales = datosFamiliaresEditables(datosSuperUsuario),
+            limitarCaracteres = true,
+            desplegablesHaciaAbajo = true,
+            fechaMinimaIso = "1900-01-01",
+            fechaMaximaIso = fechaHoyIso(),
+            colorFondo = Color(0xFF247F93),
+            onCerrar = { editarSuperUsuario = false },
+            onGuardar = { datos ->
+                val nombre = listOf(datos["Nombre"], datos["Apellidos"]).filterNotNull()
+                    .map { it.trim().replace(Regex("\\s+"), " ") }.filter(String::isNotBlank).joinToString(" ")
+                onSuperUsuarioActualizado(datos + mapOf("Nombre completo" to nombre, "Rol" to "Superusuario"))
+                editarSuperUsuario = false
+            }
+        )
+    }
+
     datosPerfilAbierto?.let { datos ->
         RegistroFormularioSheet(
             titulo = if (datos["Rol"] == "Superusuario") "Perfil del superusuario" else "Datos del perfil",
             campos = if (datos["Rol"] == "Superusuario") {
                 listOf(
-                    CampoRegistro("Nombre completo"),
+                    CampoRegistro("Nombre"),
+                    CampoRegistro("Apellidos"),
                     CampoRegistro("Rol"),
                     CampoRegistro("Correo electrónico"),
                     CampoRegistro("Teléfono"),
+                    CampoRegistro("Fecha de nacimiento", esFecha = true),
+                    CampoRegistro("Sexo"),
                     CampoRegistro("Tipo de sangre"),
                     CampoRegistro("Alergias")
                 )
             } else FormulariosRegistro.familiar,
-            valoresIniciales = datos,
+            valoresIniciales = if (datos["Rol"] == "Superusuario") datos else datosFamiliaresEditables(datos),
             soloLectura = true,
+            onEditarLectura = if (datos["Rol"] == "Superusuario") {
+                { datosPerfilAbierto = null; editarSuperUsuario = true }
+            } else null,
             onCerrar = { datosPerfilAbierto = null }
         )
     }
 }
 
-// Encabezado compacto con identidad CMD y acceso al perfil del superusuario.
+// Encabezado compacto con identidad CMD y datos del superusuario.
 @Composable
-private fun Header(onViewProfile: () -> Unit) {
-    // Nombre de ejemplo; después puede venir del perfil o de la base de datos.
-    val nombreUsuario = DemoUserName
-
+private fun Header(nombreUsuario: String, fechaNacimiento: String, tipoSangre: String) {
     // Memoriza las iniciales para no recalcularlas en cada recomposición.
     val inicialesUsuario = remember(nombreUsuario) { initialsFor(nombreUsuario) }
+    val edad = remember(fechaNacimiento) { calcularEdad(fechaNacimiento) }
+    val resumenUsuario = listOf(
+        edad?.let { "$it años" } ?: "Edad no registrada",
+        "Tipo de sangre ${tipoSangre.ifBlank { "no registrada" }}"
+    ).joinToString(" · ")
 
     // Fondo de marca con un degradado discreto azul y turquesa.
     Box(
@@ -232,24 +318,7 @@ private fun Header(onViewProfile: () -> Unit) {
                     Text("Hola, $nombreUsuario", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
 
                     // Datos demostrativos del perfil.
-                    Text("X años · Tipo de sangre O+", color = Color.White.copy(alpha = .9f), fontSize = 11.sp)
-
-                    // Deja un espacio corto antes de la acción del perfil.
-                    Spacer(Modifier.height(5.dp))
-
-                    // Acción visible para editar el perfil.
-                    Surface(
-                        modifier = Modifier.clickable(onClick = onViewProfile),
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color.White
-                    ) {
-                        Text(
-                            "Ver perfil",
-                            color = Navy,
-                            fontSize = 10.sp,
-                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 4.dp)
-                        )
-                    }
+                    Text(resumenUsuario, color = Color.White.copy(alpha = .9f), fontSize = 12.sp)
                 }
             }
         }
@@ -260,13 +329,18 @@ private fun Header(onViewProfile: () -> Unit) {
 @Composable
 private fun FamilyCard(
     selectedMember: String,
+    superUserName: String,
     perfilesAgregados: List<PerfilFamiliarDemo>,
     onSelect: (String) -> Unit,
     onAdd: () -> Unit,
     onDetails: (Map<String, String>) -> Unit,
+    onSuperUserDetails: () -> Unit,
+    onEditSuperUser: () -> Unit,
     onEdit: (PerfilFamiliarDemo) -> Unit,
     onDelete: (PerfilFamiliarDemo) -> Unit
 ) {
+    var perfilPendienteDeEliminar by remember { mutableStateOf<PerfilFamiliarDemo?>(null) }
+
     // Superficie blanca con sombra mínima para mantener un aspecto limpio.
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -276,14 +350,14 @@ private fun FamilyCard(
         border = BorderStroke(1.dp, CardBorder)
     ) {
         // Organiza el título, la indicación y las opciones familiares.
-        Column(Modifier.padding(horizontal = 13.dp, vertical = 11.dp)) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             // Título de Familiares y acceso visual a emergencias en la esquina derecha.
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Título sencillo de la sección familiar.
-                Text("Familiares", color = Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text("Familiares", color = Ink, fontSize = 17.sp, fontWeight = FontWeight.Bold)
 
                 // Empuja el icono de emergencias hacia la esquina superior derecha.
                 Spacer(Modifier.weight(1f))
@@ -297,69 +371,120 @@ private fun FamilyCard(
                 )
             }
 
-            // Instrucción breve para orientar la selección.
-            Text("Selecciona un perfil", color = Muted, fontSize = 11.sp)
+            // Orienta sobre cómo cambiar entre la cuenta propia y los familiares.
+            Text("Toca una tarjeta para cambiar el perfil", color = Muted, fontSize = 12.sp)
 
             // Separa la indicación de las tarjetas de selección.
-            Spacer(Modifier.height(9.dp))
+            Spacer(Modifier.height(12.dp))
 
-            // Mantiene visible Agregar perfil y permite desplazar los perfiles si se acumulan.
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+            // Prepara Mi perfil y los familiares para acomodarlos en filas de dos.
+            val perfilesEnTarjetas = buildList {
+                add(
+                    PerfilTileItem(
+                        id = "__superusuario__",
+                        nombre = superUserName,
+                        seleccionado = selectedMember.isBlank(),
+                        alSeleccionar = { onSelect("") },
+                        alVer = onSuperUserDetails,
+                        alEditar = onEditSuperUser,
+                        alEliminar = {},
+                        permiteEliminar = false
+                    )
+                )
                 perfilesAgregados.forEach { perfil ->
-                    key(perfil.id) {
-                        MemberTile(
-                            role = perfil.parentesco,
-                            name = perfil.nombre,
-                            selected = selectedMember == perfil.id,
-                            modifier = Modifier.width(88.dp),
-                            onClick = { onSelect(perfil.id); onDetails(perfil.datos) },
-                            onEdit = { onEdit(perfil) },
-                            onDelete = { onDelete(perfil) }
+                    add(
+                        PerfilTileItem(
+                            id = perfil.id,
+                            nombre = perfil.nombre,
+                            seleccionado = selectedMember == perfil.id,
+                            alSeleccionar = { onSelect(if (selectedMember == perfil.id) "" else perfil.id) },
+                            alVer = { onDetails(perfil.datos) },
+                            alEditar = { onEdit(perfil) },
+                            alEliminar = { perfilPendienteDeEliminar = perfil },
+                            permiteEliminar = true
                         )
-                    }
+                    )
                 }
+            }
 
-                }
-
-                Spacer(Modifier.width(8.dp))
-
-                // Opción fija para agregar un familiar, aun cuando haya muchos perfiles.
-                Column(
-                    modifier = Modifier.width(76.dp).height(88.dp).clip(RoundedCornerShape(12.dp))
-                        .background(SoftMint)
-                        .clickable(onClick = onAdd)
-                        .padding(7.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+            // Cada perfil nuevo ocupa la siguiente celda y hace crecer la tarjeta hacia abajo.
+            perfilesEnTarjetas.chunked(2).forEach { fila ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Signo más para comunicar que se puede agregar un perfil.
-                    Text("+", color = Navy, fontSize = 21.sp, fontWeight = FontWeight.Medium)
+                    fila.forEach { perfil ->
+                        key(perfil.id) {
+                            MemberTile(
+                                name = perfil.nombre,
+                                selected = perfil.seleccionado,
+                                modifier = Modifier.weight(1f),
+                                onClick = perfil.alSeleccionar,
+                                onView = perfil.alVer,
+                                onEdit = perfil.alEditar,
+                                onDelete = perfil.alEliminar,
+                                mostrarEliminar = perfil.permiteEliminar
+                            )
+                        }
+                    }
+                    if (fila.size == 1) Spacer(Modifier.weight(1f))
+                }
+            }
 
-                    // Texto de la acción para agregar un usuario.
-                    Text("Agregar perfil", color = Navy, fontSize = 9.sp, textAlign = TextAlign.Center, lineHeight = 11.sp)
+            Spacer(Modifier.height(8.dp))
+
+            // Botón compacto separado de los perfiles, alineado a la esquina inferior derecha.
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Surface(
+                    modifier = Modifier.clickable(onClick = onAdd),
+                    shape = RoundedCornerShape(22.dp),
+                    color = SoftMint
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text("+", color = Navy, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Agregar perfil", color = Navy, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    }
                 }
             }
         }
+    }
+
+    // Confirma la eliminación antes de borrar el perfil y su historial asociado.
+    perfilPendienteDeEliminar?.let { perfil ->
+        AlertDialog(
+            onDismissRequest = { perfilPendienteDeEliminar = null },
+            title = { Text("Eliminar perfil") },
+            text = { Text("¿Quieres eliminar el perfil de ${perfil.nombre} y sus registros médicos?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDelete(perfil)
+                        perfilPendienteDeEliminar = null
+                    }
+                ) { Text("Eliminar", color = Color(0xFFB3261E)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { perfilPendienteDeEliminar = null }) { Text("Cancelar") }
+            }
+        )
     }
 }
 
 // Tarjeta individual de un perfil dentro del selector familiar.
 @Composable
 private fun MemberTile(
-    role: String,
     name: String,
     selected: Boolean,
     modifier: Modifier,
     onClick: () -> Unit,
+    onView: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    mostrarEliminar: Boolean
 ) {
     // Anima suavemente el cambio entre el tono claro y el azul seleccionado translúcido.
     val tileBackgroundColor by animateColorAsState(
@@ -372,7 +497,7 @@ private fun MemberTile(
     var menuAbierto by remember { mutableStateOf(false) }
 
     Box(
-        modifier = modifier.height(88.dp).clip(RoundedCornerShape(12.dp))
+        modifier = modifier.height(122.dp).clip(RoundedCornerShape(12.dp))
             .background(tileBackgroundColor)
             .clickable(onClick = onClick)
             .padding(6.dp)
@@ -382,8 +507,7 @@ private fun MemberTile(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text(role, color = if (selected) Color.White else Ink, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-            Text(name, color = if (selected) Color.White.copy(alpha = .9f) else Muted, fontSize = 10.sp, maxLines = 2, textAlign = TextAlign.Center)
+            Text(name, color = if (selected) Color.White else Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, textAlign = TextAlign.Center, lineHeight = 19.sp)
         }
 
         Box(
@@ -401,44 +525,11 @@ private fun MemberTile(
                 onDismissRequest = { menuAbierto = false },
                 containerColor = Color(0xFFF2F7FA)
             ) {
+                DropdownMenuItem(text = { Text("Ver perfil") }, onClick = { menuAbierto = false; onView() })
                 DropdownMenuItem(text = { Text("Editar") }, onClick = { menuAbierto = false; onEdit() })
-                DropdownMenuItem(text = { Text("Eliminar") }, onClick = { menuAbierto = false; onDelete() })
-            }
-        }
-    }
-}
-
-// Tarjeta sencilla que resalta la siguiente cita médica.
-@Composable
-private fun AppointmentCard() {
-    // Superficie turquesa de alto contraste para encontrar la cita rápido.
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Teal),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        // Organiza el detalle de la cita en una sola fila compacta.
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Texto que identifica la sección de citas.
-            Text("CITA", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-
-            // Separa la etiqueta del detalle de la cita.
-            Spacer(Modifier.width(12.dp))
-
-            // Información de ejemplo de la cita próxima.
-            Column {
-                // Título directo de la tarjeta.
-                Text("Próxima cita", color = Color.White.copy(alpha = .9f), fontSize = 10.sp)
-
-                // Especialidad médica y familiar con cita.
-                Text("Pediatra · Lucas", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-
-                // Fecha y hora de muestra.
-                Text("Mañana · 10:00", color = Color.White, fontSize = 10.sp)
+                if (mostrarEliminar) {
+                    DropdownMenuItem(text = { Text("Eliminar") }, onClick = { menuAbierto = false; onDelete() })
+                }
             }
         }
     }

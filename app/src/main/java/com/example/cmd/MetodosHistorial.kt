@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicLong
 interface RegistroHistorialBase {
     val idLocal: Long
     val perfilNombre: String
+    val perfilId: String
     val fechaRegistro: String
     val resumen: String
 }
@@ -19,7 +20,8 @@ data class AccidenteRegistro(
     val queOcurrio: String,
     val lesion: String,
     val atencionRecibida: String,
-    val fotoUri: String? = null
+    val fotoUri: String? = null,
+    override val perfilId: String = perfilNombre
 ) : RegistroHistorialBase {
     override val fechaRegistro: String get() = fechaAccidente
     override val resumen: String get() = queOcurrio
@@ -34,7 +36,8 @@ data class CirugiaRegistro(
     val diagnosticoMotivo: String,
     val medicoCirujano: String,
     val hospital: String,
-    val complicaciones: String
+    val complicaciones: String,
+    override val perfilId: String = perfilNombre
 ) : RegistroHistorialBase {
     override val fechaRegistro: String get() = fechaCirugia
     override val resumen: String get() = procedimiento
@@ -48,7 +51,8 @@ data class ConsultaRegistro(
     val especialidad: String,
     val motivoConsulta: String,
     val diagnostico: String,
-    val medicoTratante: String
+    val medicoTratante: String,
+    override val perfilId: String = perfilNombre
 ) : RegistroHistorialBase {
     override val fechaRegistro: String get() = fechaConsulta
     override val resumen: String get() = motivoConsulta
@@ -62,7 +66,8 @@ data class EnfermedadRegistro(
     val fechaDiagnostico: String,
     val estado: String,
     val tratamientoActual: String,
-    val notas: String
+    val notas: String,
+    override val perfilId: String = perfilNombre
 ) : RegistroHistorialBase {
     override val fechaRegistro: String get() = fechaDiagnostico
     override val resumen: String get() = nombreEnfermedad
@@ -78,7 +83,8 @@ data class HospitalizacionRegistro(
     val motivo: String,
     val diagnostico: String,
     val tratamientoProcedimiento: String,
-    val medicoResponsable: String
+    val medicoResponsable: String,
+    override val perfilId: String = perfilNombre
 ) : RegistroHistorialBase {
     override val fechaRegistro: String get() = fechaIngreso
     override val resumen: String get() = motivo
@@ -93,26 +99,35 @@ object RepositorioHistorialLocal {
     private val enfermedades = mutableStateListOf<EnfermedadRegistro>()
     private val hospitalizaciones = mutableStateListOf<HospitalizacionRegistro>()
 
-    fun consultarAccidentes(perfil: String) = accidentes.delPerfil(perfil)
-    fun consultarCirugias(perfil: String) = cirugias.delPerfil(perfil)
-    fun consultarConsultas(perfil: String) = consultas.delPerfil(perfil)
-    fun consultarEnfermedades(perfil: String) = enfermedades.delPerfil(perfil)
-    fun consultarHospitalizaciones(perfil: String) = hospitalizaciones.delPerfil(perfil)
+    fun consultarAccidentes(perfilId: String) = accidentes.delPerfil(perfilId)
+    fun consultarCirugias(perfilId: String) = cirugias.delPerfil(perfilId)
+    fun consultarConsultas(perfilId: String) = consultas.delPerfil(perfilId)
+    fun consultarEnfermedades(perfilId: String) = enfermedades.delPerfil(perfilId)
+    fun consultarHospitalizaciones(perfilId: String) = hospitalizaciones.delPerfil(perfilId)
 
-    fun consultarTodos(perfil: String): List<RegistroHistorialBase> = buildList {
-        addAll(consultarAccidentes(perfil))
-        addAll(consultarCirugias(perfil))
-        addAll(consultarConsultas(perfil))
-        addAll(consultarEnfermedades(perfil))
-        addAll(consultarHospitalizaciones(perfil))
+    fun consultarTodos(perfilId: String): List<RegistroHistorialBase> = buildList {
+        addAll(consultarAccidentes(perfilId))
+        addAll(consultarCirugias(perfilId))
+        addAll(consultarConsultas(perfilId))
+        addAll(consultarEnfermedades(perfilId))
+        addAll(consultarHospitalizaciones(perfilId))
     }.sortedByDescending { it.fechaRegistro }
 
-    fun eliminarPerfil(perfil: String) {
-        accidentes.removeAll { it.perfilNombre == perfil }
-        cirugias.removeAll { it.perfilNombre == perfil }
-        consultas.removeAll { it.perfilNombre == perfil }
-        enfermedades.removeAll { it.perfilNombre == perfil }
-        hospitalizaciones.removeAll { it.perfilNombre == perfil }
+    fun eliminarPerfil(perfilId: String) {
+        accidentes.removeAll { it.perfilId == perfilId }
+        cirugias.removeAll { it.perfilId == perfilId }
+        consultas.removeAll { it.perfilId == perfilId }
+        enfermedades.removeAll { it.perfilId == perfilId }
+        hospitalizaciones.removeAll { it.perfilId == perfilId }
+    }
+
+    // Actualiza el nombre mostrado sin cambiar la identidad asociada a los registros.
+    fun actualizarNombrePerfil(perfilId: String, nuevoNombre: String) {
+        accidentes.indices.forEach { i -> if (accidentes[i].perfilId == perfilId) accidentes[i] = accidentes[i].copy(perfilNombre = nuevoNombre) }
+        cirugias.indices.forEach { i -> if (cirugias[i].perfilId == perfilId) cirugias[i] = cirugias[i].copy(perfilNombre = nuevoNombre) }
+        consultas.indices.forEach { i -> if (consultas[i].perfilId == perfilId) consultas[i] = consultas[i].copy(perfilNombre = nuevoNombre) }
+        enfermedades.indices.forEach { i -> if (enfermedades[i].perfilId == perfilId) enfermedades[i] = enfermedades[i].copy(perfilNombre = nuevoNombre) }
+        hospitalizaciones.indices.forEach { i -> if (hospitalizaciones[i].perfilId == perfilId) hospitalizaciones[i] = hospitalizaciones[i].copy(perfilNombre = nuevoNombre) }
     }
 
     fun agregarAccidente(registro: AccidenteRegistro) { accidentes.add(registro.copy(idLocal = siguienteId.getAndIncrement())) }
@@ -134,8 +149,8 @@ object RepositorioHistorialLocal {
     fun eliminarHospitalizacion(id: Long) { hospitalizaciones.eliminar(id) }
 
     // Consulta y ordena registros por perfil, con la fecha más reciente primero.
-    private fun <T : RegistroHistorialBase> List<T>.delPerfil(perfil: String) =
-        filter { it.perfilNombre == perfil }.sortedByDescending { it.fechaRegistro }
+    private fun <T : RegistroHistorialBase> List<T>.delPerfil(perfilId: String) =
+        filter { it.perfilId == perfilId }.sortedByDescending { it.fechaRegistro }
 
     // Reemplaza un registro por su identificador local.
     private fun <T : RegistroHistorialBase> MutableList<T>.reemplazar(registro: T) {
@@ -178,7 +193,8 @@ class MetodosHistorial {
     fun consultarEnfermedades(perfil: String) = RepositorioHistorialLocal.consultarEnfermedades(perfil)
     fun consultarHospitalizaciones(perfil: String) = RepositorioHistorialLocal.consultarHospitalizaciones(perfil)
     fun consultarTodos(perfil: String) = RepositorioHistorialLocal.consultarTodos(perfil)
-    fun eliminarPerfil(perfil: String) = RepositorioHistorialLocal.eliminarPerfil(perfil)
+    fun eliminarPerfil(perfilId: String) = RepositorioHistorialLocal.eliminarPerfil(perfilId)
+    fun actualizarNombrePerfil(perfilId: String, nuevoNombre: String) = RepositorioHistorialLocal.actualizarNombrePerfil(perfilId, nuevoNombre)
 
     fun agregarAccidente(registro: AccidenteRegistro) = RepositorioHistorialLocal.agregarAccidente(registro)
     fun agregarCirugia(registro: CirugiaRegistro) = RepositorioHistorialLocal.agregarCirugia(registro)
