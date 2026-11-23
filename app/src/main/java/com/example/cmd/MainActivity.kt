@@ -269,7 +269,6 @@ private fun CmdHomeScreen() {
                             1 -> HistorialScreen(
                                 selectedUserName = nombrePerfilSeleccionado,
                                 colorTarjetaPerfil = colorTarjetaPerfil,
-                                selectedProfileBirthDate = datosMedicosPerfil?.get("Fecha de nacimiento"),
                                 modifier = Modifier.fillMaxSize()
                             )
 
