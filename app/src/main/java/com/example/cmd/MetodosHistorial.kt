@@ -153,7 +153,7 @@ object RepositorioHistorialLocal {
 class MetodosHistorial {
     // Obtiene los registros del tipo elegido conservando sus modelos tipados.
     fun consultarPorSubmodulo(perfil: String, submodulo: String): List<RegistroHistorialBase> = when (submodulo) {
-        "Accidentes" -> consultarAccidentes(perfil)
+        "Eventos", "Accidentes" -> consultarAccidentes(perfil)
         "Cirugías" -> consultarCirugias(perfil)
         "Consultas" -> consultarConsultas(perfil)
         "Enfermedades" -> consultarEnfermedades(perfil)

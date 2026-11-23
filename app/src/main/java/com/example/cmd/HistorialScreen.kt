@@ -65,11 +65,6 @@ private val HistorialCardBorder = Color(0x70B8D3E2)
 private val HistorialSoftMint = Color(0xBAE8F5F2)
 private val HistorialTealTranslucido = Color(0xD832B6AD)
 
-private fun fechaVisibleHistorial(fechaIso: String): String {
-    val partes = fechaIso.split("-")
-    return if (partes.size == 3) "${partes[2]}/${partes[1]}/${partes[0]}" else fechaIso
-}
-
 private data class SubmoduloHistorial(val nombre: String, val icono: Int)
 
 private val SubmodulosHistorial = listOf(
@@ -243,10 +238,7 @@ private fun HojaRegistrosHistorial(
     ModalBottomSheet(onDismissRequest = onCerrar, containerColor = HistorialTealTranslucido, contentColor = Color.White, shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(nombreSubmodulo, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            if (registros.isEmpty()) {
-                Text("Aún no hay registros", fontWeight = FontWeight.SemiBold)
-                Text("Usa el botón + para agregar el primero.", color = Color.White.copy(alpha = .9f), modifier = Modifier.padding(bottom = 12.dp))
-            }
+            if (registros.isEmpty()) Text("Aún no hay registros en este submódulo.", modifier = Modifier.padding(vertical = 16.dp))
             else registros.forEach { registro -> TarjetaRegistroHistorial(registro, { onConsultar(registro) }, { onEditar(registro) }, { onEliminar(registro) }) }
             Spacer(Modifier.height(8.dp))
         }
@@ -258,7 +250,7 @@ private fun HojaRegistrosHistorial(
 private fun TarjetaRegistroHistorial(registro: RegistroHistorialBase, onConsultar: () -> Unit, onEditar: () -> Unit, onEliminar: () -> Unit) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = HistorialCardSurface), border = BorderStroke(1.dp, HistorialCardBorder)) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(fechaVisibleHistorial(registro.fechaRegistro), color = HistorialNavy, fontWeight = FontWeight.Bold)
+            Text(registro.fechaRegistro, color = HistorialNavy, fontWeight = FontWeight.Bold)
             Text(registro.resumen, color = HistorialInk, maxLines = 2)
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 TextButton(onClick = onConsultar) { Text("Consultar") }
@@ -279,7 +271,7 @@ private fun DialogoDetalleHistorial(registro: RegistroHistorialBase, mostrarFoto
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 when (registro) {
                     is AccidenteRegistro -> {
-                        DatoDetalle("Fecha", fechaVisibleHistorial(registro.fechaAccidente)); DatoDetalle("Qué ocurrió", registro.queOcurrio)
+                        DatoDetalle("Fecha", registro.fechaAccidente); DatoDetalle("Qué ocurrió", registro.queOcurrio)
                         DatoDetalle("Lesión o diagnóstico", registro.lesion); DatoDetalle("Atención recibida", registro.atencionRecibida)
                         registro.fotoUri?.let { uri ->
                             TextButton(onClick = onAlternarFoto) { Text(if (mostrarFoto) "Ocultar fotografía" else "Mostrar fotografía") }
@@ -287,20 +279,20 @@ private fun DialogoDetalleHistorial(registro: RegistroHistorialBase, mostrarFoto
                         }
                     }
                     is CirugiaRegistro -> {
-                        DatoDetalle("Fecha", fechaVisibleHistorial(registro.fechaCirugia)); DatoDetalle("Procedimiento", registro.procedimiento)
+                        DatoDetalle("Fecha", registro.fechaCirugia); DatoDetalle("Procedimiento", registro.procedimiento)
                         DatoDetalle("Diagnóstico o motivo", registro.diagnosticoMotivo); DatoDetalle("Médico cirujano", registro.medicoCirujano)
                         DatoDetalle("Hospital", registro.hospital); DatoDetalle("Complicaciones", registro.complicaciones)
                     }
                     is ConsultaRegistro -> {
-                        DatoDetalle("Fecha", fechaVisibleHistorial(registro.fechaConsulta)); DatoDetalle("Especialidad", registro.especialidad)
+                        DatoDetalle("Fecha", registro.fechaConsulta); DatoDetalle("Especialidad", registro.especialidad)
                         DatoDetalle("Motivo", registro.motivoConsulta); DatoDetalle("Diagnóstico", registro.diagnostico); DatoDetalle("Médico", registro.medicoTratante)
                     }
                     is EnfermedadRegistro -> {
-                        DatoDetalle("Enfermedad", registro.nombreEnfermedad); DatoDetalle("Fecha de diagnóstico", fechaVisibleHistorial(registro.fechaDiagnostico))
+                        DatoDetalle("Enfermedad", registro.nombreEnfermedad); DatoDetalle("Fecha de diagnóstico", registro.fechaDiagnostico)
                         DatoDetalle("Estado", registro.estado); DatoDetalle("Tratamiento actual", registro.tratamientoActual); DatoDetalle("Notas", registro.notas)
                     }
                     is HospitalizacionRegistro -> {
-                        DatoDetalle("Hospital", registro.hospital); DatoDetalle("Ingreso", fechaVisibleHistorial(registro.fechaIngreso)); DatoDetalle("Alta", fechaVisibleHistorial(registro.fechaAlta))
+                        DatoDetalle("Hospital", registro.hospital); DatoDetalle("Ingreso", registro.fechaIngreso); DatoDetalle("Alta", registro.fechaAlta)
                         DatoDetalle("Motivo", registro.motivo); DatoDetalle("Diagnóstico", registro.diagnostico)
                         DatoDetalle("Tratamiento o procedimiento", registro.tratamientoProcedimiento); DatoDetalle("Médico responsable", registro.medicoResponsable)
                     }

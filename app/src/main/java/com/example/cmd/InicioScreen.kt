@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -47,7 +46,7 @@ private val CardBorder = Color(0x70B8D3E2)
 // Menta translúcido para perfiles seleccionados y etiquetas de accesos rápidos.
 private val SoftMint = Color(0xBAE8F5F2)
 
-// Nombre visible mientras el perfil del usuario aún no proviene de una cuenta real.
+// Nombre demostrativo usado en el encabezado.
 private const val DemoUserName = "Braulio Castillo"
 
 data class PerfilFamiliarDemo(
@@ -67,7 +66,7 @@ private fun initialsFor(name: String): String = name
     .joinToString("")
     .ifBlank { "?" }
 
-// Pantalla de inicio con el perfil familiar y el estado de citas.
+// Pantalla de inicio con perfil familiar, accesos y próxima cita.
 @Composable
 fun InicioScreen(
     selectedMember: String,
@@ -80,7 +79,6 @@ fun InicioScreen(
 ) {
     var mostrarAltaFamiliar by remember { mutableStateOf(false) }
     var perfilEditando by remember { mutableStateOf<PerfilFamiliarDemo?>(null) }
-    var perfilPorEliminar by remember { mutableStateOf<PerfilFamiliarDemo?>(null) }
     var datosPerfilAbierto by remember { mutableStateOf<Map<String, String>?>(null) }
     val datosSuperUsuario = mapOf(
         "Nombre completo" to DemoUserName,
@@ -93,29 +91,28 @@ fun InicioScreen(
     // Lista desplazable con fondo de la pantalla.
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Encabezado de bienvenida y datos del usuario.
         item { Header(onViewProfile = { datosPerfilAbierto = datosSuperUsuario }) }
 
-        item {
-            FamilyCard(
-                selectedMember = selectedMember,
-                perfilesAgregados = perfilesAgregados,
-                onSelect = onMemberSelected,
-                onAdd = { mostrarAltaFamiliar = true },
-                onDetails = { datosPerfilAbierto = it },
-                onEdit = { perfilEditando = it },
-                onDelete = { perfilPorEliminar = it },
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-        }
-
+        // Contenido principal de la pantalla.
         item {
             Column(Modifier.padding(horizontal = 16.dp)) {
-                Text("Agenda", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
+                // Selector sencillo de perfiles familiares.
+                FamilyCard(
+                    selectedMember = selectedMember,
+                    perfilesAgregados = perfilesAgregados,
+                    onSelect = onMemberSelected,
+                    onAdd = { mostrarAltaFamiliar = true },
+                    onDetails = { datosPerfilAbierto = it },
+                    onEdit = { perfilEditando = it },
+                    onDelete = onProfileDeleted
+                )
+
+                // Separa la tarjeta familiar de la próxima cita.
+                Spacer(Modifier.height(10.dp))
+
+                // Muestra un resumen de la cita más cercana.
                 AppointmentCard()
             }
         }
@@ -126,25 +123,16 @@ fun InicioScreen(
         RegistroFormularioSheet(
             titulo = if (perfilActual == null) "Agregar familiar" else "Editar perfil",
             campos = FormulariosRegistro.familiar,
-            valoresIniciales = perfilActual?.let { perfil ->
-                perfil.datos + mapOf(
-                    "Nombre" to perfil.datos["Nombre"].orEmpty().ifBlank { perfil.nombre },
-                    "Apellidos" to perfil.datos["Apellidos"].orEmpty()
-                )
-            }.orEmpty(),
+            valoresIniciales = perfilActual?.datos.orEmpty(),
             permitirFoto = true,
             onCerrar = { mostrarAltaFamiliar = false; perfilEditando = null },
             onGuardar = { datos ->
-                val nombre = listOf(datos["Nombre"], datos["Apellidos"])
-                    .mapNotNull { it?.trim()?.takeIf(String::isNotEmpty) }
-                    .joinToString(" ")
-                    .ifBlank { datos["Nombre completo"].orEmpty().trim() }
-                val datosConNombreCompleto = datos + ("Nombre completo" to nombre)
+                val nombre = datos["Nombre completo"].orEmpty().trim()
                 val perfil = PerfilFamiliarDemo(
                     id = perfilActual?.id ?: "familiar_${System.currentTimeMillis()}",
                     nombre = nombre,
                     parentesco = datos["Parentesco"].orEmpty(),
-                    datos = datosConNombreCompleto
+                    datos = datos
                 )
                 if (perfilActual == null) {
                     onProfileAdded(perfil)
@@ -176,26 +164,9 @@ fun InicioScreen(
             onCerrar = { datosPerfilAbierto = null }
         )
     }
-
-    perfilPorEliminar?.let { perfil ->
-        AlertDialog(
-            onDismissRequest = { perfilPorEliminar = null },
-            title = { Text("Eliminar perfil") },
-            text = { Text("¿Quieres eliminar el perfil de ${perfil.nombre}? También se quitarán sus registros de historial de esta sesión.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    onProfileDeleted(perfil)
-                    perfilPorEliminar = null
-                }) { Text("Eliminar", color = Color(0xFFB3261E)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { perfilPorEliminar = null }) { Text("Cancelar") }
-            }
-        )
-    }
 }
 
-// Encabezado de bienvenida con acceso a los datos de la cuenta.
+// Encabezado compacto con identidad CMD y acceso al perfil del superusuario.
 @Composable
 private fun Header(onViewProfile: () -> Unit) {
     // Nombre de ejemplo; después puede venir del perfil o de la base de datos.
@@ -206,10 +177,10 @@ private fun Header(onViewProfile: () -> Unit) {
 
     // Fondo de marca con un degradado discreto azul y turquesa.
     Box(
-        modifier = Modifier.fillMaxWidth().height(184.dp)
+        modifier = Modifier.fillMaxWidth().height(174.dp)
     ) {
         // Acomoda la marca y el saludo con espacio suficiente para leerlos.
-            Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp)) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp)) {
             // Fila superior que identifica la aplicación.
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 // Etiqueta de texto CMD en lugar de un emoji o icono decorativo.
@@ -234,13 +205,13 @@ private fun Header(onViewProfile: () -> Unit) {
             }
 
             // Deja espacio entre el nombre de la app y el saludo.
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(17.dp))
 
             // Muestra las iniciales y el nombre del usuario.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // Avatar sencillo con iniciales derivadas del nombre.
                 Box(
-                    Modifier.size(54.dp).clip(CircleShape).background(Color.White),
+                    Modifier.size(48.dp).clip(CircleShape).background(Color.White),
                     contentAlignment = Alignment.Center
                 ) {
                     // Iniciales visibles del usuario.
@@ -258,10 +229,10 @@ private fun Header(onViewProfile: () -> Unit) {
                 // Saludo y datos breves del usuario.
                 Column {
                     // Saludo fácil de entender para la persona usuaria.
-                    Text("Hola, $nombreUsuario", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("Hola, $nombreUsuario", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
 
                     // Datos demostrativos del perfil.
-                    Text("Tu salud y la de tu familia, en un solo lugar.", color = Color.White.copy(alpha = .9f), fontSize = 12.sp)
+                    Text("X años · Tipo de sangre O+", color = Color.White.copy(alpha = .9f), fontSize = 11.sp)
 
                     // Deja un espacio corto antes de la acción del perfil.
                     Spacer(Modifier.height(5.dp))
@@ -275,8 +246,8 @@ private fun Header(onViewProfile: () -> Unit) {
                         Text(
                             "Ver perfil",
                             color = Navy,
-                            fontSize = 11.sp,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            fontSize = 10.sp,
+                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 4.dp)
                         )
                     }
                 }
@@ -294,39 +265,40 @@ private fun FamilyCard(
     onAdd: () -> Unit,
     onDetails: (Map<String, String>) -> Unit,
     onEdit: (PerfilFamiliarDemo) -> Unit,
-    onDelete: (PerfilFamiliarDemo) -> Unit,
-    modifier: Modifier = Modifier
+    onDelete: (PerfilFamiliarDemo) -> Unit
 ) {
     // Superficie blanca con sombra mínima para mantener un aspecto limpio.
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         border = BorderStroke(1.dp, CardBorder)
     ) {
         // Organiza el título, la indicación y las opciones familiares.
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 15.dp)) {
+        Column(Modifier.padding(horizontal = 13.dp, vertical = 11.dp)) {
+            // Título de Familiares y acceso visual a emergencias en la esquina derecha.
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Título sencillo de la sección familiar.
-                Text("Perfiles familiares", color = Ink, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text("Familiares", color = Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
 
+                // Empuja el icono de emergencias hacia la esquina superior derecha.
                 Spacer(Modifier.weight(1f))
-                Surface(shape = RoundedCornerShape(20.dp), color = SoftMint) {
-                    Text("${perfilesAgregados.size}", color = Navy, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
-                }
+
+                // Icono de equipo médico asociado a contactos de emergencia.
+                Image(
+                    painter = painterResource(id = R.drawable.equipo_medico),
+                    contentDescription = "Contactos de emergencia",
+                    modifier = Modifier.size(27.dp),
+                    contentScale = ContentScale.Fit
+                )
             }
 
             // Instrucción breve para orientar la selección.
-            Text(
-                if (perfilesAgregados.isEmpty()) "Agrega un perfil familiar para comenzar."
-                else "Selecciona a quién quieres consultar",
-                color = Muted,
-                fontSize = 12.sp
-            )
+            Text("Selecciona un perfil", color = Muted, fontSize = 11.sp)
 
             // Separa la indicación de las tarjetas de selección.
             Spacer(Modifier.height(9.dp))
@@ -346,9 +318,8 @@ private fun FamilyCard(
                             role = perfil.parentesco,
                             name = perfil.nombre,
                             selected = selectedMember == perfil.id,
-                            modifier = Modifier.width(100.dp),
-                            onClick = { onSelect(perfil.id) },
-                            onDetails = { onDetails(perfil.datos) },
+                            modifier = Modifier.width(88.dp),
+                            onClick = { onSelect(perfil.id); onDetails(perfil.datos) },
                             onEdit = { onEdit(perfil) },
                             onDelete = { onDelete(perfil) }
                         )
@@ -361,19 +332,18 @@ private fun FamilyCard(
 
                 // Opción fija para agregar un familiar, aun cuando haya muchos perfiles.
                 Column(
-                    modifier = Modifier.width(80.dp).height(96.dp).clip(RoundedCornerShape(14.dp))
+                    modifier = Modifier.width(76.dp).height(88.dp).clip(RoundedCornerShape(12.dp))
                         .background(SoftMint)
-                        .border(1.dp, CardBorder, RoundedCornerShape(14.dp))
                         .clickable(onClick = onAdd)
-                        .padding(8.dp),
+                        .padding(7.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
                     // Signo más para comunicar que se puede agregar un perfil.
-                    Text("+", color = Navy, fontSize = 24.sp, fontWeight = FontWeight.Medium)
+                    Text("+", color = Navy, fontSize = 21.sp, fontWeight = FontWeight.Medium)
 
                     // Texto de la acción para agregar un usuario.
-                    Text("Agregar", color = Navy, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, lineHeight = 13.sp)
+                    Text("Agregar perfil", color = Navy, fontSize = 9.sp, textAlign = TextAlign.Center, lineHeight = 11.sp)
                 }
             }
         }
@@ -388,7 +358,6 @@ private fun MemberTile(
     selected: Boolean,
     modifier: Modifier,
     onClick: () -> Unit,
-    onDetails: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -403,31 +372,18 @@ private fun MemberTile(
     var menuAbierto by remember { mutableStateOf(false) }
 
     Box(
-        modifier = modifier.height(96.dp).clip(RoundedCornerShape(14.dp))
+        modifier = modifier.height(88.dp).clip(RoundedCornerShape(12.dp))
             .background(tileBackgroundColor)
-            .border(1.dp, if (selected) Color.White.copy(alpha = .75f) else CardBorder, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(7.dp)
+            .padding(6.dp)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 3.dp, vertical = 4.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 3.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically)
+            verticalArrangement = Arrangement.Center
         ) {
-            Box(
-                Modifier.size(30.dp).clip(CircleShape)
-                    .background(if (selected) Color.White.copy(alpha = .2f) else SoftMint),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    initialsFor(name),
-                    color = if (selected) Color.White else Navy,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Text(role, color = if (selected) Color.White else Ink, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-            Text(name, color = if (selected) Color.White.copy(alpha = .9f) else Muted, fontSize = 10.sp, maxLines = 1, textAlign = TextAlign.Center)
+            Text(role, color = if (selected) Color.White else Ink, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            Text(name, color = if (selected) Color.White.copy(alpha = .9f) else Muted, fontSize = 10.sp, maxLines = 2, textAlign = TextAlign.Center)
         }
 
         Box(
@@ -445,7 +401,6 @@ private fun MemberTile(
                 onDismissRequest = { menuAbierto = false },
                 containerColor = Color(0xFFF2F7FA)
             ) {
-                DropdownMenuItem(text = { Text("Ver datos") }, onClick = { menuAbierto = false; onDetails() })
                 DropdownMenuItem(text = { Text("Editar") }, onClick = { menuAbierto = false; onEdit() })
                 DropdownMenuItem(text = { Text("Eliminar") }, onClick = { menuAbierto = false; onDelete() })
             }
@@ -453,24 +408,37 @@ private fun MemberTile(
     }
 }
 
-// Estado vacío de citas hasta conectar el calendario.
+// Tarjeta sencilla que resalta la siguiente cita médica.
 @Composable
 private fun AppointmentCard() {
+    // Superficie turquesa de alto contraste para encontrar la cita rápido.
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = Teal),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
+        // Organiza el detalle de la cita en una sola fila compacta.
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("CITAS", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            // Texto que identifica la sección de citas.
+            Text("CITA", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+
+            // Separa la etiqueta del detalle de la cita.
             Spacer(Modifier.width(12.dp))
+
+            // Información de ejemplo de la cita próxima.
             Column {
-                Text("Sin citas registradas", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                Text("Aquí aparecerán las próximas citas.", color = Color.White.copy(alpha = .9f), fontSize = 11.sp)
+                // Título directo de la tarjeta.
+                Text("Próxima cita", color = Color.White.copy(alpha = .9f), fontSize = 10.sp)
+
+                // Especialidad médica y familiar con cita.
+                Text("Pediatra · Lucas", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+
+                // Fecha y hora de muestra.
+                Text("Mañana · 10:00", color = Color.White, fontSize = 10.sp)
             }
         }
     }
