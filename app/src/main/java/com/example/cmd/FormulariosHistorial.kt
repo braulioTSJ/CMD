@@ -123,7 +123,7 @@ fun FormularioCirugia(perfil: String, registro: CirugiaRegistro?, onCerrar: () -
     var medico by remember(registro) { mutableStateOf(registro?.medicoCirujano.orEmpty()) }
     var hospital by remember(registro) { mutableStateOf(registro?.hospital.orEmpty()) }
     var complicaciones by remember(registro) { mutableStateOf(registro?.complicaciones.orEmpty()) }
-    FormularioBaseHistorial("Cirugía", registro != null, onCerrar, fecha.isNotBlank() && esFechaDentroDeLimites(fecha, fechaNacimientoPerfil ?: "1900-01-01", fechaHoyIso()) && procedimiento.isNotBlank() && motivo.isNotBlank() && textosEnLimite(procedimiento to 500, motivo to 500, medico to 150, hospital to 150, complicaciones to 500), campos = {
+    FormularioBaseHistorial("Cirugía", registro != null, onCerrar, fecha.isNotBlank() && esFechaDentroDeLimites(fecha, fechaNacimientoPerfil ?: "1900-01-01", fechaHoyIso()) && procedimiento.isNotBlank() && motivo.isNotBlank() && textosEnLimite(procedimiento to 200, motivo to 200, medico to 150, hospital to 150, complicaciones to 200), campos = {
         CampoFechaRegistro("Fecha de cirugía", fecha, { fecha = it }, false, coloresCampos, fechaNacimientoPerfil ?: "1900-01-01", fechaHoyIso())
         CampoTextoHistorial("Procedimiento", procedimiento, { procedimiento = it })
         CampoTextoHistorial("Diagnóstico o motivo", motivo, { motivo = it }, multilinea = true)
@@ -229,7 +229,7 @@ private fun FormularioBaseHistorial(
 
 // Campo de texto reutilizable para evitar repetir estilo; el contenido de cada formulario sigue siendo explícito.
 @Composable
-private fun CampoTextoHistorial(etiqueta: String, valor: String, onValor: (String) -> Unit, multilinea: Boolean = false, requerido: Boolean = true, maxCaracteres: Int = 500, soloLetras: Boolean = false) {
+private fun CampoTextoHistorial(etiqueta: String, valor: String, onValor: (String) -> Unit, multilinea: Boolean = false, requerido: Boolean = true, maxCaracteres: Int = 200, soloLetras: Boolean = false) {
     OutlinedTextField(
         value = valor,
         onValueChange = { nuevo ->

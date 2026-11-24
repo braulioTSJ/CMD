@@ -203,7 +203,7 @@ fun InicioScreen(
             CampoRegistro("Fecha de nacimiento", esFecha = true),
             CampoRegistro("Sexo", listOf("Masculino", "Femenino", "Otro"), requerido = false),
             CampoRegistro("Tipo de sangre", listOf("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"), requerido = false, maxCaracteres = 10),
-            CampoRegistro("Alergias", requerido = false, unaLinea = false, maxCaracteres = 500)
+            CampoRegistro("Alergias", requerido = false, unaLinea = false, maxCaracteres = 200)
         )
         RegistroFormularioSheet(
             titulo = "Editar mi perfil",

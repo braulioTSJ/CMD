@@ -74,7 +74,7 @@ object FormulariosRegistro {
         CampoRegistro("Fecha de nacimiento", esFecha = true),
         CampoRegistro("Sexo", listOf("Masculino", "Femenino", "Otro")),
         CampoRegistro("Tipo de sangre", listOf("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"), requerido = false, maxCaracteres = 10),
-        CampoRegistro("Alergias", requerido = false, unaLinea = false, maxCaracteres = 500)
+        CampoRegistro("Alergias", requerido = false, unaLinea = false, maxCaracteres = 200)
     )
     // Devuelve solo los campos necesarios para registrar cada tipo de evento médico.
     fun historialPorSubmodulo(submodulo: String): List<CampoRegistro> = when (submodulo) {
